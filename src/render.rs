@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 pub use crate::player::Player;
 
-pub fn render(wall: Texture2D, player: &mut Player) {
+pub fn render(wall: Texture2D, player: &Player) {
     set_camera(&Camera3D {
         position: player.position,
         up: player.up,

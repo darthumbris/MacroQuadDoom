@@ -69,7 +69,7 @@ async fn main() {
         
         movement(delta, &mut player);
 
-        render(wall, &mut player);
+        render(wall, & player);
 
         next_frame().await
     }
