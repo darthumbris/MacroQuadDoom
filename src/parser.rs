@@ -1,7 +1,7 @@
 use std::array::TryFromSliceError;
 use std::fs;
 use std::collections::HashMap;
-
+#[derive(Debug)]
 enum LumpTypes {
     Text,
     Map,
@@ -18,7 +18,9 @@ enum LumpTypes {
     ColorMap,
     EndDoom,
     PNames,
-    Name
+    Texture1,
+    Texture2,
+    ERROR
 }
 
 fn read_short(wad_data: &Vec<u8>, offset: &mut usize) -> Result<i16, TryFromSliceError> {
@@ -50,7 +52,7 @@ fn copy_and_capitalize_buffer(
 	wad_data: &Vec<u8>, offset: &mut usize,
 	src_length: u32)
 {
-    let mut owned_string: String = "".to_owned();
+    let mut owned_string: String = String::from("");
     let mut i: usize = 0;
 	while i < src_length as usize && wad_data[*offset + i] != 0 {
         owned_string.push((wad_data[*offset + i]).to_ascii_uppercase() as char);
@@ -67,6 +69,7 @@ struct WADHeader {
     directory_offset: u32
 }
 
+#[derive(Clone)]
 struct WADEntry {
     offset: u32, //offset to start of lump
     size: u32, // size of the lump
@@ -106,7 +109,7 @@ struct WADData {
 
 fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
     let mut wad_header = WADHeader{
-        map_type: "".to_owned(),
+        map_type: String::from(""),
         lump_count: 0,
         directory_offset: 0
     };
@@ -122,16 +125,16 @@ fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
 fn read_directory(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
     for i in 0 .. wad_parsed.wad_header.lump_count {
         let mut wad_entry = WADEntry{
-            name: "".to_owned(),
+            name: String::from(""),
             size: 0,
             offset: 0
         };
         wad_entry.offset = read_uint(wad_data, offset).unwrap();
         wad_entry.size = read_uint(wad_data, offset).unwrap();
         copy_and_capitalize_buffer(&mut wad_entry.name, wad_data, offset, 8);
-        println!("offset: {}", wad_entry.offset);
-        println!("size: {}", wad_entry.size);
-        println!("name: {}", wad_entry.name);
+        // println!("offset: {}", wad_entry.offset);
+        // println!("size: {}", wad_entry.size);
+        // println!("name: {}", wad_entry.name);
         wad_parsed.lump_map.insert(wad_entry.name.clone(), i);
         wad_parsed.directory.push(wad_entry);
     }
@@ -146,7 +149,7 @@ fn read_pallete(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData
     while *offset < pallete_entry.offset  as usize + pallete_entry.size as usize {
         let mut palette_: Vec<WADPaletteColor> = Vec::with_capacity(256);
 
-        for i in 0 .. 256 {
+        for _i in 0 .. 256 {
             let color_: WADPaletteColor = WADPaletteColor { r: wad_data[*offset], g: wad_data[*offset + 1], b: wad_data[*offset + 2] };
             palette_.push(color_);
             *offset += 3;
@@ -165,7 +168,7 @@ fn read_colormap(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADDat
     while *offset < color_map.offset  as usize + color_map.size as usize {
         let mut colormap_: Vec<u8> = Vec::with_capacity(256);
 
-        for i in 0 .. 256 {
+        for _i in 0 .. 256 {
             colormap_.push(wad_data[*offset]);
             *offset += 1;
         }
@@ -175,57 +178,116 @@ fn read_colormap(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADDat
     println!("color_maps: {}", wad_parsed.color_maps.len());
 }
 
-fn read_sprites(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
+// fn read_sprites(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
     
-}
+// }
 
-fn headerCheck(data: &Vec<u8>, header: &str, offset: usize) ->bool {
+fn header_check(data: &Vec<u8>, header: &str, offset: usize) ->bool {
     for (i, c) in header.bytes().enumerate() {
         if c != data[offset + i] {return false;}
     }
     return true;
 }
 
-fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpTypes{
-    let map_lumps: [String; 13] = ["THINGS".to_owned(),"LINEDEFS".to_owned(),"SIDEDEFS".to_owned(),"VERTEXES".to_owned(),"SEGS".to_owned(),"TEXTMAP".to_owned(),
-                "SSECTORS".to_owned(),"NODES".to_owned(),"SECTORS".to_owned(),"REJECT".to_owned(),"BLOCKMAP".to_owned(),"BEHAVIOR".to_owned(),"ZNODES".to_owned()];
-    let text_lumps: [String; 17] = [ "DEHACKED".to_owned(), "MAPINFO".to_owned(), "ZMAPINFO".to_owned(), "EMAPINFO".to_owned(), 
-                "DMXGUS".to_owned(), "DMXGUSC".to_owned(), "WADINFO".to_owned(), "EMENUS".to_owned(), "MUSINFO".to_owned(),
-                "SNDINFO".to_owned(), "GLDEFS".to_owned(), "KEYCONF".to_owned(), "SCRIPTS".to_owned(), "LANGUAGE".to_owned(),
-                "DECORATE".to_owned(), "SBARINFO".to_owned(), "MENUDEF".to_owned() ];
-    let data_lumps = [ "PLAYPAL".to_owned(), "COLORMAP".to_owned(), "TEXTURE1".to_owned(), "TEXTURE2".to_owned(), "PNAMES".to_owned(),
-                  "ENDOOM".to_owned()];
+fn is_doom_gfx(dv: &Vec<u8>,lump: WADEntry, offset: usize) ->bool {
+    // first check the dimensions aren't ridiculous
+    let mut temp_offset = offset;
+    if read_ushort(dv, &mut temp_offset).unwrap() > 4096 {return false}
+    if read_ushort(dv, &mut temp_offset).unwrap() > 4096 {return false}
 
+    if read_short(dv, &mut temp_offset).unwrap().abs() > 2000 {return false}
+    if read_short(dv, &mut temp_offset).unwrap().abs() > 2000 {return false}
+
+    // then check it ends in 0xFF
+    if dv[lump.size as usize - 1] != 0xFF {
+        // sometimes the graphics have up to 3 garbage 0x00 bytes at the end
+        let mut found = false;
+        for b in 1..4 {
+            if found == false {
+                if dv[lump.size as usize - b] == 0xFF {
+                    found = true;
+                } else if dv[lump.size as usize - b] != 0x00 {
+                    return false;
+                }
+            }
+        }
+        if found == false {return false;}
+    }
+    // I think this is enough for now. If I get false positives, I'll look into more comprehensive checks.
+    true
+}
+
+fn data_lump(name: &str) -> LumpTypes {
+    match name {
+        "PLAYPAL" => return LumpTypes::PlayPal,
+        "COLORMAP" => return LumpTypes::ColorMap,
+        "TEXTURE1" => return  LumpTypes::Texture1,
+        "TEXTURE2" => return  LumpTypes::Texture2,
+        "PNAMES" => return LumpTypes::PNames,
+        "ENDOOM" => return LumpTypes::EndDoom,
+        _ => return LumpTypes::ERROR
+    }
+}
+
+fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpTypes{
+    let map_lumps: Vec<&str> = vec!["THINGS","LINEDEFS","SIDEDEFS","VERTEXES","SEGS","TEXTMAP",
+                "SSECTORS","NODES","SECTORS","REJECT","BLOCKMAP","BEHAVIOR","ZNODES"];
+    let text_lumps: Vec<&str> = vec![ "DEHACKED", "MAPINFO", "ZMAPINFO", "EMAPINFO", 
+                "DMXGUS", "DMXGUSC", "WADINFO", "EMENUS", "MUSINFO",
+                "SNDINFO", "GLDEFS", "KEYCONF", "SCRIPTS", "LANGUAGE",
+                "DECORATE", "SBARINFO", "MENUDEF" ];
+    let data_lumps = vec![ "PLAYPAL", "COLORMAP", "TEXTURE1", "TEXTURE2", "PNAMES",
+                  "ENDOOM"];
+                  let graphic_markers = vec!["P_","PP_","P1_","P2_","P3_","S_","S2_","S3_","SS_"];
+                  let flat_markers = vec!["F_","FF_","F1_","F2_","F3_"];
+    
     //Data based lump detection
     if wad_parsed.directory[index].size != 0 {
         let offset = wad_parsed.directory[index].offset as usize;
-        if headerCheck(data, "MThd", offset) {
+        if header_check(data, "MThd", offset) {
             return LumpTypes::MIDI;
         }    
-        if headerCheck(data, "ID3", offset) {
+        if header_check(data, "ID3", offset) {
             return LumpTypes::MP3;
         }
-        if headerCheck(data, "MUS", offset) {
+        if header_check(data, "MUS", offset) {
             return LumpTypes::MUS;
         }
-        if headerCheck(data, "PNG", offset) {
+        if header_check(data, "PNG", offset) {
             return LumpTypes::PNG;
         }
     }
-
+    
     //Name based detection
     let name = wad_parsed.directory[index].name.clone();
-    if text_lumps.contains(&name) {return LumpTypes::Text;}
-    if map_lumps.contains(&name) {return LumpTypes::MapData;}
-    if data_lumps.contains(&name) {return LumpTypes::Name;}
-    // if /^MAP\d\d/.test(name) {return LumpTypes::Map;}
-    // if /^E\dM\d/.test(name) {return LumpTypes::Map;}
-    // if /_START$/.test(name) {return LumpTypes::Marker;}
-    // if /_END$/.test(name) {return LumpTypes::Marker;}
+    if text_lumps.contains(&name.as_str()) {return LumpTypes::Text;}
+    if map_lumps.contains(&name.as_str()) {return LumpTypes::MapData;}
+    if data_lumps.contains(&name.as_str()) {return data_lump(&name.as_str())}
+    if name.starts_with("MAP") && name.len() > 3 && name.chars().nth(3).unwrap() >= '0' && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map;}
+    if name.starts_with("E") && name.len() > 3 && name.chars().nth(1).unwrap() >= '0' && name.chars().nth(1).unwrap() <= '9' && name.chars().nth(2).unwrap() == 'M' &&
+        name.chars().nth(3).unwrap() >= '0' && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map;}
+    if name.ends_with("_START") {return LumpTypes::Marker;}
+    if name.ends_with("_END") {return LumpTypes::Marker;}
 
     if wad_parsed.directory[index].size == 0 {return LumpTypes::Marker;}
 
-    return LumpTypes::Graphic
+    //between markers
+    for _i in (0..index).rev() {
+            if wad_parsed.directory[index].name.ends_with("_END") {break;}
+            if wad_parsed.directory[index].name.ends_with("_START") {
+                let pre = wad_parsed.directory[index].name.trim_end_matches("START");
+                if graphic_markers.contains(&pre) {return  LumpTypes::Graphic;}
+                if flat_markers.contains(&pre) {return  LumpTypes::Flat;}
+            }
+    }
+
+    //shitty name-based detection
+    if name.starts_with("D_") {return LumpTypes::Music;}
+
+    if is_doom_gfx(data, wad_parsed.directory[index].clone(), wad_parsed.directory[index].offset as usize) {
+        return LumpTypes::Graphic
+    }
+    return LumpTypes::ERROR;
 }
 
 
@@ -247,5 +309,7 @@ pub fn parse_map(path: &str) {
     read_directory(&map, &mut offset, &mut wad_parsed);
     read_pallete(&map, &mut offset, &mut wad_parsed);
     read_colormap(&map, &mut offset, &mut wad_parsed);
+    println!("lump[4]: {}", wad_parsed.directory[1269].name);
+    println!("lump type: {:?}", detect_lump_type(&wad_parsed, 1269, &map));
     println!("\ndone parsing!");
 }
