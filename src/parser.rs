@@ -1,7 +1,7 @@
 use std::array::TryFromSliceError;
 use std::fs;
 use std::collections::HashMap;
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum LumpTypes {
     Text,
     Map,
@@ -103,7 +103,8 @@ struct WADData {
     lump_map: HashMap<String, u32>,
     wad_header: WADHeader,
     palletes: Vec<Vec<WADPaletteColor>>,
-    color_maps: Vec<Vec<u8>>
+    color_maps: Vec<Vec<u8>>,
+    sprites: Vec<(String, WADSprite)>
 }
 
 
@@ -132,9 +133,9 @@ fn read_directory(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADDa
         wad_entry.offset = read_uint(wad_data, offset).unwrap();
         wad_entry.size = read_uint(wad_data, offset).unwrap();
         copy_and_capitalize_buffer(&mut wad_entry.name, wad_data, offset, 8);
-        // println!("offset: {}", wad_entry.offset);
-        // println!("size: {}", wad_entry.size);
-        // println!("name: {}", wad_entry.name);
+        println!("offset: {}", wad_entry.offset);
+        println!("size: {}", wad_entry.size);
+        println!("name: {}", wad_entry.name);
         wad_parsed.lump_map.insert(wad_entry.name.clone(), i);
         wad_parsed.directory.push(wad_entry);
     }
@@ -178,9 +179,45 @@ fn read_colormap(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADDat
     println!("color_maps: {}", wad_parsed.color_maps.len());
 }
 
-// fn read_sprites(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
+fn read_sprites(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
+    let sprite_lump = &wad_parsed.directory[index];
+    let mut offset = sprite_lump.offset as usize;
+
+    let mut sprite: WADSprite = WADSprite { width: 0, height: 0, left_offset: 0, top_offset: 0, posts: vec![] };
+
+    sprite.width = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    sprite.height = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    sprite.left_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    sprite.top_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+
+    let mut col_offsets = vec![];
+
+    for _i in 0..sprite.width {
+        col_offsets.push(read_uint(wad_data, &mut offset).unwrap());
+    }
+
+    for i in 0..sprite.width {
+        offset = sprite_lump.offset as usize + col_offsets[i as usize] as usize;
+
+        while wad_data[offset] != 0xff {
+            let mut post: WADSpritePost = WADSpritePost { col: 0, row: 0, size: 0, pixels: vec![] };
+            post.col = i as u8;
+            post.row = wad_data[offset];
+            post.size = wad_data[offset + 1];
+            offset += 3; // 2 + 1 to skip the first unused byte
+
+            for _k in 0..post.size {
+                post.pixels.push(wad_data[offset]);
+                offset += 1;
+            }
+            offset += 1; // to skip the last unused byte
+            sprite.posts.push(post);
+        }
+    }
+    println!("Adding sprite :{}", sprite_lump.name);
+    wad_parsed.sprites.push((sprite_lump.name.to_string(), sprite));
     
-// }
+}
 
 fn header_check(data: &Vec<u8>, header: &str, offset: usize) ->bool {
     for (i, c) in header.bytes().enumerate() {
@@ -238,8 +275,8 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
                 "DECORATE", "SBARINFO", "MENUDEF" ];
     let data_lumps = vec![ "PLAYPAL", "COLORMAP", "TEXTURE1", "TEXTURE2", "PNAMES",
                   "ENDOOM"];
-                  let graphic_markers = vec!["P_","PP_","P1_","P2_","P3_","S_","S2_","S3_","SS_"];
-                  let flat_markers = vec!["F_","FF_","F1_","F2_","F3_"];
+    let graphic_markers = vec!["P_","PP_","P1_","P2_","P3_","S_","S2_","S3_","SS_"];
+    let flat_markers = vec!["F_","FF_","F1_","F2_","F3_"];
     
     //Data based lump detection
     if wad_parsed.directory[index].size != 0 {
@@ -272,13 +309,13 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
     if wad_parsed.directory[index].size == 0 {return LumpTypes::Marker;}
 
     //between markers
-    for _i in (0..index).rev() {
-            if wad_parsed.directory[index].name.ends_with("_END") {break;}
-            if wad_parsed.directory[index].name.ends_with("_START") {
-                let pre = wad_parsed.directory[index].name.trim_end_matches("START");
-                if graphic_markers.contains(&pre) {return  LumpTypes::Graphic;}
-                if flat_markers.contains(&pre) {return  LumpTypes::Flat;}
-            }
+    for i in (0..index).rev() {
+        if wad_parsed.directory[i].name.ends_with("_END") {break;}
+        if wad_parsed.directory[i].name.ends_with("_START") {
+            let pre = wad_parsed.directory[i].name.trim_end_matches("START");
+            if graphic_markers.contains(&pre) {return  LumpTypes::Graphic;}
+            if flat_markers.contains(&pre) {return  LumpTypes::Flat;}
+        }
     }
 
     //shitty name-based detection
@@ -288,6 +325,14 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
         return LumpTypes::Graphic
     }
     return LumpTypes::ERROR;
+}
+
+fn read_data_lumps(wad_data: &Vec<u8>, wad_parsed: &mut WADData) {
+    for i in 0..wad_parsed.directory.len() {
+        if detect_lump_type(wad_parsed, i, wad_data) == LumpTypes::Graphic {
+            read_sprites(wad_data, wad_parsed, i);
+        }
+    }
 }
 
 
@@ -303,13 +348,15 @@ pub fn parse_map(path: &str) {
         lump_map: HashMap::new(),
         wad_header: wad_header,
         palletes: vec![],
-        color_maps: vec![]
+        color_maps: vec![],
+        sprites: vec![]
     };
 
     read_directory(&map, &mut offset, &mut wad_parsed);
     read_pallete(&map, &mut offset, &mut wad_parsed);
     read_colormap(&map, &mut offset, &mut wad_parsed);
-    println!("lump[4]: {}", wad_parsed.directory[1269].name);
-    println!("lump type: {:?}", detect_lump_type(&wad_parsed, 1269, &map));
+    read_data_lumps(&map, &mut wad_parsed);
+    println!("lump[4]: {}", wad_parsed.directory[1267].name);
+    println!("lump type: {:?}", detect_lump_type(&wad_parsed, 1267, &map));
     println!("\ndone parsing!");
 }
