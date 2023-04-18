@@ -104,7 +104,8 @@ struct WADData {
     wad_header: WADHeader,
     palletes: Vec<Vec<WADPaletteColor>>,
     color_maps: Vec<Vec<u8>>,
-    sprites: Vec<(String, WADSprite)>
+    sprites: Vec<(String, WADSprite)>,
+    flats: Vec<u8>
 }
 
 
@@ -183,12 +184,12 @@ fn read_sprites(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
     let sprite_lump = &wad_parsed.directory[index];
     let mut offset = sprite_lump.offset as usize;
 
-    let mut sprite: WADSprite = WADSprite { width: 0, height: 0, left_offset: 0, top_offset: 0, posts: vec![] };
+    let width = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    let height = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    let left_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    let top_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
 
-    sprite.width = u32::from(read_ushort(wad_data, &mut offset).unwrap());
-    sprite.height = u32::from(read_ushort(wad_data, &mut offset).unwrap());
-    sprite.left_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
-    sprite.top_offset = u32::from(read_ushort(wad_data, &mut offset).unwrap());
+    let mut sprite = WADSprite { width, height, left_offset, top_offset, posts: vec![] };
 
     let mut col_offsets = vec![];
 
@@ -200,23 +201,26 @@ fn read_sprites(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         offset = sprite_lump.offset as usize + col_offsets[i as usize] as usize;
 
         while wad_data[offset] != 0xff {
-            let mut post: WADSpritePost = WADSpritePost { col: 0, row: 0, size: 0, pixels: vec![] };
-            post.col = i as u8;
-            post.row = wad_data[offset];
-            post.size = wad_data[offset + 1];
+            let col = i as u8;
+            let row = wad_data[offset];
+            let size = wad_data[offset + 1];
             offset += 3; // 2 + 1 to skip the first unused byte
-
-            for _k in 0..post.size {
-                post.pixels.push(wad_data[offset]);
-                offset += 1;
-            }
+            let pixels = wad_data[offset..size as usize + offset].to_vec();
+            let post: WADSpritePost = WADSpritePost { col, row, size, pixels};
+            offset += post.size as usize;
             offset += 1; // to skip the last unused byte
             sprite.posts.push(post);
         }
     }
-    println!("Adding sprite :{}", sprite_lump.name);
+    // println!("Adding sprite :{}", sprite_lump.name);
     wad_parsed.sprites.push((sprite_lump.name.to_string(), sprite));
     
+}
+
+fn read_flats(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
+    let offset = wad_parsed.directory[index].offset as usize;
+    let pixels = wad_data[offset..offset + 4096].to_vec();
+    wad_parsed.flats = pixels;
 }
 
 fn header_check(data: &Vec<u8>, header: &str, offset: usize) ->bool {
@@ -236,19 +240,23 @@ fn is_doom_gfx(dv: &Vec<u8>,lump: WADEntry, offset: usize) ->bool {
     if read_short(dv, &mut temp_offset).unwrap().abs() > 2000 {return false}
 
     // then check it ends in 0xFF
-    if dv[lump.size as usize - 1] != 0xFF {
+    temp_offset = offset + lump.size as usize - 1;
+    let res = dv[temp_offset];
+    if res != 255 {
         // sometimes the graphics have up to 3 garbage 0x00 bytes at the end
         let mut found = false;
-        for b in 1..4 {
+        for b in 1..=4 {
             if found == false {
-                if dv[lump.size as usize - b] == 0xFF {
+                temp_offset = offset + lump.size as usize - b;
+                let temp = dv[temp_offset];
+                if temp == 255 {
                     found = true;
-                } else if dv[lump.size as usize - b] != 0x00 {
+                } else if temp != 0 {
                     return false;
                 }
             }
         }
-        if found == false {return false;}
+        return found
     }
     // I think this is enough for now. If I get false positives, I'll look into more comprehensive checks.
     true
@@ -324,13 +332,20 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
     if is_doom_gfx(data, wad_parsed.directory[index].clone(), wad_parsed.directory[index].offset as usize) {
         return LumpTypes::Graphic
     }
+    println!("lump: {} failed to get a lumptype", name);
     return LumpTypes::ERROR;
 }
 
 fn read_data_lumps(wad_data: &Vec<u8>, wad_parsed: &mut WADData) {
     for i in 0..wad_parsed.directory.len() {
-        if detect_lump_type(wad_parsed, i, wad_data) == LumpTypes::Graphic {
-            read_sprites(wad_data, wad_parsed, i);
+        match detect_lump_type(wad_parsed, i, wad_data) {
+            LumpTypes::Graphic => {
+                read_sprites(wad_data, wad_parsed, i);
+            }
+            LumpTypes::Flat => {
+                read_flats(wad_data, wad_parsed, i);
+            }
+            o => println!("not implemented {:?} yet", o)
         }
     }
 }
@@ -349,14 +364,13 @@ pub fn parse_map(path: &str) {
         wad_header: wad_header,
         palletes: vec![],
         color_maps: vec![],
-        sprites: vec![]
+        sprites: vec![],
+        flats: vec![]
     };
 
     read_directory(&map, &mut offset, &mut wad_parsed);
     read_pallete(&map, &mut offset, &mut wad_parsed);
     read_colormap(&map, &mut offset, &mut wad_parsed);
     read_data_lumps(&map, &mut wad_parsed);
-    println!("lump[4]: {}", wad_parsed.directory[1267].name);
-    println!("lump type: {:?}", detect_lump_type(&wad_parsed, 1267, &map));
     println!("\ndone parsing!");
 }
