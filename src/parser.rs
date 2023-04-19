@@ -108,6 +108,107 @@ struct WADData {
     flats: Vec<u8>
 }
 
+struct WADLevelBlockmap {
+    x: u8,
+    y: u8,
+    num_cols: u8,
+    num_rows: u8,
+    blocklists: Vec<Vec<u8>>
+}
+
+struct WADLevelSector {
+    floor_height: u8,
+    ceiling_height: u8,
+    floor_texture: String,
+    ceiling_texture: String,
+    light_level: u8,
+    special: u8,
+    tag: u8
+}
+
+struct WADLevelSubSector {
+    num_segs: u8,
+    start_seg: u8
+}
+
+struct WADLevelSeg {
+    start: u8,
+    end: u8,
+    angle: u8,
+    linedef: u8,
+    direction: u8,
+    offset: u8
+}
+
+struct WADLevelVertex {
+    x: u8,
+    y: u8
+}
+
+struct WADLevelSidedef {
+    x_offset: u8,
+    y_offset: u8,
+    sector: u8,
+    upper_texture: String,
+    lower_texture: String,
+    middle_texture: String,
+}
+
+struct WADLevelLinedef
+{
+  from: u8,
+  to: u8,
+  flags: u8,
+  types: u8,
+  tag: u8,
+  right_sidedef: u8,
+  left_sidedef: u8
+}
+
+struct WADLevelThing
+{
+  x: u8,
+  y: u8,
+  angle: u8,
+  type_: u8,
+  options: u8,
+}
+
+struct WADLevelNode {
+    x_start: u8,
+    y_start: u8,
+    dx: u8,
+    dy: u8,
+    right_y_upper: u8,
+    right_y_lower: u8,
+    right_x_lower: u8,
+    right_x_upper: u8,
+    left_y_upper: u8,
+    left_y_lower: u8,
+    left_x_lower: u8,
+    left_x_upper: u8,
+    right_child: u8,
+    left_child: u8
+}
+
+
+
+struct WADLevel {
+    name: String,
+    things: Vec<WADLevelThing>,
+    linedefs: Vec<WADLevelLinedef>,
+    sidedefs: Vec<WADLevelSidedef>,
+    vertexes: Vec<WADLevelVertex>,
+    segs: Vec<WADLevelSeg>,
+    ssectors: Vec<WADLevelSubSector>,
+    nodes: Vec<WADLevelNode>,
+    sectors: Vec<WADLevelSector>,
+    blockmap: WADLevelBlockmap,
+    reject: Vec<Vec<bool>>,
+    // behavior,
+    // znodes
+}
+
 
 fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
     let mut wad_header = WADHeader{
