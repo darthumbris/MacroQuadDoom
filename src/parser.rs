@@ -1,10 +1,12 @@
 
 mod parse_graphics;
+mod parse_level;
 
 use parse_graphics::*;
 use std::array::TryFromSliceError;
 use std::fs;
 use std::collections::HashMap;
+use parse_level::*;
 
 
 #[derive(Debug, PartialEq)]
@@ -120,9 +122,9 @@ fn read_directory(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADDa
         wad_entry.offset = read_uint(wad_data, offset).unwrap();
         wad_entry.size = read_uint(wad_data, offset).unwrap();
         copy_and_capitalize_buffer(&mut wad_entry.name, wad_data, offset, 8);
-        println!("offset: {}", wad_entry.offset);
-        println!("size: {}", wad_entry.size);
-        println!("name: {}", wad_entry.name);
+        // println!("offset: {}", wad_entry.offset);
+        // println!("size: {}", wad_entry.size);
+        // println!("name: {}", wad_entry.name);
         wad_parsed.lump_map.insert(wad_entry.name.clone(), i);
         wad_parsed.directory.push(wad_entry);
     }
@@ -218,7 +220,12 @@ fn read_data_lumps(wad_data: &Vec<u8>, wad_parsed: &mut WADData) {
             LumpTypes::Flat => {
                 read_flats(wad_data, wad_parsed, i);
             }
-            o => println!("not implemented {:?} yet", o)
+            LumpTypes::Map => {
+                read_levels(wad_data, wad_parsed, i);
+            }
+            _o => {
+                // println!("not implemented {:?} yet", o)
+            }
         }
     }
 }
