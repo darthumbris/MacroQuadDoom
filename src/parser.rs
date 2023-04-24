@@ -55,6 +55,12 @@ fn read_uint(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u32, TryFromSlice
     Ok(tmp_)
 }
 
+fn read_u8(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u8, TryFromSliceError> {
+    let tmp_ = u8::from_le_bytes(wad_data[*offset..*offset + 1].try_into()?);
+    *offset += 1;
+    Ok(tmp_)
+}
+
 fn copy_and_capitalize_buffer(
 	r_dst: &mut String,
 	wad_data: &Vec<u8>, offset: &mut usize,
