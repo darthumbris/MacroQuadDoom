@@ -111,6 +111,16 @@ struct WADLevelNode {
     left_child: i16
 }
 
+struct WADLevelBehavior {
+    marker: i32,
+
+}
+
+struct WADLevelScriptInfo {
+    number: i32,
+    offset: i32,
+    arg_count: i32
+}
 
 
 struct WADLevel {
@@ -470,6 +480,39 @@ fn parse_blockmap(lump: &Vec<u8>) -> WADLevelBlockmap {
     blockmap
 }
 
+fn parse_behavior(lump: &Vec<u8>) {
+    let mut offset: usize = 0;
+    let marker = read_int(lump, &mut offset).unwrap();
+    let info_offset = read_int(lump, &mut offset).unwrap();
+
+    offset = info_offset as usize;
+    let script_count = read_int(lump, &mut offset).unwrap();
+
+    let mut info: Vec<WADLevelScriptInfo> = vec![];
+
+    for _i in 0..script_count {
+        let number = read_int(lump, &mut offset).unwrap();
+        let offset_ = read_int(lump, &mut offset).unwrap();
+        let arg_count = read_int(lump, &mut offset).unwrap();
+        info.push(WADLevelScriptInfo { number, offset: offset_, arg_count });
+    }
+
+    let string_count = read_int(lump, &mut offset).unwrap();
+
+    let mut string_table: Vec<i32> = vec![];
+
+    for _i in 0..string_count {
+        string_table.push(read_int(lump, &mut offset).unwrap());
+    }
+
+    if marker == 0x41435300 {//Hexen
+
+    }
+    else if marker == 0x41435345 /*oldZdoom*/ || marker == 0x41435365 /*newZdoom */ {
+
+    }
+}
+
 fn parse_rejects(lump: &Vec<u8>, sector_size: usize) -> Vec<Vec<bool>> {
     let mut rejects: Vec<Vec<bool>> = vec![];
     for _i in 0..sector_size {
@@ -495,6 +538,7 @@ fn parse_rejects(lump: &Vec<u8>, sector_size: usize) -> Vec<Vec<bool>> {
             rejects[col][row] = bit != 0;
             col += 1;
         }
+        offset += 1;
     }
     rejects
 }
@@ -523,9 +567,7 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
     }
 
     let name = &wad_parsed.directory[index].name;
-    if format == Format::DOOM {
-        let things = parse_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
-        let linedefs = parse_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+    if format == Format::DOOM || format == Format::HEXEN {
         let sidedefs = parse_sidedefs(&get_map_lump("SIDEDEFS".to_owned(), wad_parsed, wad_data));
         let vertexes = parse_vertexes(&get_map_lump("VERTEXES".to_owned(), wad_parsed, wad_data));
         let segs = parse_segs(&get_map_lump("SEGS".to_owned(), wad_parsed, wad_data));
@@ -535,17 +577,14 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         let blockmap = parse_blockmap(&get_map_lump("BLOCKMAP".to_owned(), wad_parsed, wad_data));
         let reject = parse_rejects(&get_map_lump("REJECT".to_owned(), wad_parsed, wad_data), sectors.len());
     }
+    if format == Format::DOOM {
+        let things = parse_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
+        let linedefs = parse_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+        
+    }
     if format == Format::HEXEN {
         let things = parse_hexen_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
         let linedefs = parse_hexen_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
-        let sidedefs = parse_sidedefs(&get_map_lump("SIDEDEFS".to_owned(), wad_parsed, wad_data));
-        let vertexes = parse_vertexes(&get_map_lump("VERTEXES".to_owned(), wad_parsed, wad_data));
-        let segs = parse_segs(&get_map_lump("SEGS".to_owned(), wad_parsed, wad_data));
-        let ssectors = parse_subsectors(&get_map_lump("SSECTORS".to_owned(), wad_parsed, wad_data));
-        let nodes = parse_nodes(&get_map_lump("NODES".to_owned(), wad_parsed, wad_data));
-        let sectors = parse_sectors(&get_map_lump("SECTORS".to_owned(), wad_parsed, wad_data));
-        let blockmap = parse_blockmap(&get_map_lump("BLOCKMAP".to_owned(), wad_parsed, wad_data));
-        let reject = parse_rejects(&get_map_lump("REJECT".to_owned(), wad_parsed, wad_data), sectors.len());
     }
 
     
