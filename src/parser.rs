@@ -31,37 +31,37 @@ enum LumpTypes {
     ERROR
 }
 
-fn read_short(wad_data: &Vec<u8>, offset: &mut usize) -> Result<i16, TryFromSliceError> {
+pub fn read_short(wad_data: &Vec<u8>, offset: &mut usize) -> Result<i16, TryFromSliceError> {
     let tmp_ = i16::from_le_bytes(wad_data[*offset..*offset+2].try_into()?);
     *offset += 2;
     Ok(tmp_)
 }
 
-fn read_ushort(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u16, TryFromSliceError> {
+pub fn read_ushort(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u16, TryFromSliceError> {
     let tmp_ = u16::from_le_bytes(wad_data[*offset..*offset+2].try_into()?);
     *offset += 2;
     Ok(tmp_)
 }
 
-fn read_int(wad_data: &Vec<u8>, offset: &mut usize) -> Result<i32, TryFromSliceError> {
+pub fn read_int(wad_data: &Vec<u8>, offset: &mut usize) -> Result<i32, TryFromSliceError> {
     let tmp_ = i32::from_le_bytes(wad_data[*offset..*offset+4].try_into()?);
     *offset += 4;
     Ok(tmp_)
 }
 
-fn read_uint(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u32, TryFromSliceError> {
+pub fn read_uint(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u32, TryFromSliceError> {
     let tmp_ = u32::from_le_bytes(wad_data[*offset..*offset+4].try_into()?);
     *offset += 4;
     Ok(tmp_)
 }
 
-fn read_u8(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u8, TryFromSliceError> {
+pub fn read_u8(wad_data: &Vec<u8>, offset: &mut usize) -> Result<u8, TryFromSliceError> {
     let tmp_ = u8::from_le_bytes(wad_data[*offset..*offset + 1].try_into()?);
     *offset += 1;
     Ok(tmp_)
 }
 
-fn copy_and_capitalize_buffer(
+pub fn copy_and_capitalize_buffer(
 	r_dst: &mut String,
 	wad_data: &Vec<u8>, offset: &mut usize,
 	src_length: u32)

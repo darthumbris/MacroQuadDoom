@@ -5,6 +5,8 @@ pub mod render;
 pub mod player;
 pub mod parser;
 
+pub mod behavior;
+
 pub use movement::movement;
 pub use render::render;
 pub use player::Player;
