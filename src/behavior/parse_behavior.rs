@@ -54,7 +54,7 @@ pub fn parse_behavior(lump: &Vec<u8>) -> Option<WADLevelBehavior> {
         let number = read_int(lump, &mut offset).unwrap();
         let offset_ = read_int(lump, &mut offset).unwrap();
         let arg_count = read_int(lump, &mut offset).unwrap();
-        info.push(WADLevelScriptInfo { number, offset: offset_, arg_count });
+        // info.push(WADLevelScriptInfo { number, offset: offset_, arg_count });
     }
 
     let string_count = read_int(lump, &mut offset).unwrap();
@@ -82,6 +82,7 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
             offset = inf_offset as usize;
             script_count = read_int(data, &mut offset).unwrap();
             if script_count != 0 {
+                let scripts: Vec<WADLevelScriptInfo> = Vec::with_capacity(script_count);
 
             }
         },
