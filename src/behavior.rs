@@ -1,5 +1,7 @@
 
+use std::ops::IndexMut;
 use std::ops::Index;
+use std::cmp::Ordering;
 pub mod parse_behavior;
 pub use crate::parser::*;
 
@@ -7,7 +9,8 @@ pub use crate::parser::*;
 enum Acs{
     AcsOld,
     AcsEnhanced,
-    AcsLittleEnhanced
+    AcsLittleEnhanced,
+    AcsUnkown
 }
 
 pub struct WADLevelBehavior {
@@ -19,8 +22,20 @@ pub struct WADLevelBehavior {
     should_localize: bool,
 }
 
+union WADLevelScriptInfo<'a> {
+    hexen: WADLevelScriptInfoHexen,
+    zdoom_old: WADLevelScriptInfoZdoomOld,
+    zdoom_new: WADLevelScriptInfoZdoomNew,
+    memory: WADLevelScriptInfoMemory<'a>
+}
+
+// pub struct WADLevelScriptInfo {
+    
+// }
+
 //Hexen version
-pub struct WADLevelScriptInfo {
+#[derive(Clone, Copy)]
+pub struct WADLevelScriptInfoHexen {
     number: u32,
     address: u32, //offset
     arg_count: u32
@@ -28,6 +43,7 @@ pub struct WADLevelScriptInfo {
 }
 
 //old zdoom version
+#[derive(Clone, Copy)]
 pub struct WADLevelScriptInfoZdoomOld {
     number: i32,
     type_: u16,
@@ -36,6 +52,7 @@ pub struct WADLevelScriptInfoZdoomOld {
 }
 
 //new zdoom version
+#[derive(Clone, Copy)]
 pub struct WADLevelScriptInfoZdoomNew {
     number: i16,
     type_: u8,
@@ -44,17 +61,37 @@ pub struct WADLevelScriptInfoZdoomNew {
 }
 
 //in Memory version
-pub struct WADLevelScriptInfoMemory {
+#[derive(Clone, Copy, Eq)]
+pub struct WADLevelScriptInfoMemory<'a> {
     number: i32,
     address: u32,
     type_: u8,
     arg_count: u8,
     var_count: u16,
     flags: u16,
-    local_arrays: AcsLocalArrays,
-    profile_data: AcsProfileInfo
+    local_arrays: Option<AcsLocalArrays<'a>>,
+    profile_data: Option<AcsProfileInfo>
 }
 
+impl PartialOrd for WADLevelScriptInfoMemory<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for WADLevelScriptInfoMemory<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.number.cmp(&other.number)
+    }
+}
+
+impl PartialEq for WADLevelScriptInfoMemory<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct AcsProfileInfo {
     total_instr: u128,
     num_runs: u32,
@@ -62,8 +99,9 @@ struct AcsProfileInfo {
     max_instr_per_run: u32
 }
 
+
 impl AcsProfileInfo {
-    pub fn add_run(&self, num_instr: u32) {
+    pub fn add_run(&mut self, num_instr: u32) {
         self.total_instr += u128::from(num_instr);
         self.num_runs += 1;
         if self.num_runs < self.min_instr_per_run {
@@ -74,7 +112,7 @@ impl AcsProfileInfo {
         }
     }
 
-    pub fn reset(&self) {
+    pub fn reset(&mut self) {
         self.total_instr = 0;
         self.num_runs = 0;
         self.min_instr_per_run = 0;
@@ -91,20 +129,15 @@ impl AcsProfileInfo {
     }
 }
 
-struct AcsLocalArrays {
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct AcsLocalArrays<'a> {
     count : u32,
-    info: Option<Vec<AcsLocalArrayInfo>>
-
-    //constructor
+    info: Option<&'a[AcsLocalArrayInfo]>
 
     //destructor
-
-    // set fn
-
-    // get fn
 }
 
-impl AcsLocalArrays {
+impl AcsLocalArrays<'_> {
     pub fn new() -> Self {
         Self {
             count: 0,
@@ -114,7 +147,7 @@ impl AcsLocalArrays {
 
     //destructor?
 
-    pub fn set(&self, locals: &AcsLocalVariables, array_num: i32, array_entry: i32, value: i32) {
+    pub fn set(&self, locals: &mut AcsLocalVariables, array_num: i32, array_entry: i32, value: i32) {
         if (array_num as u32) < self.count && (array_entry as u32) < self.info.unwrap()[array_num as usize].size {
             locals[self.info.unwrap()[array_num as usize].offset as usize + array_entry as usize] = value;
         }
@@ -128,6 +161,7 @@ impl AcsLocalArrays {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct AcsLocalArrayInfo {
     size: u32,
     offset: i32
@@ -147,11 +181,19 @@ impl Index<usize> for AcsLocalVariables {
     }
 }
 
+impl IndexMut<usize> for AcsLocalVariables {
+
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        //check here for overflow?
+        &mut self.memory[index]
+    }
+}
+
 impl AcsLocalVariables {
 
     //constructor
 
-    fn reset(&self, memory: Vec<i32>, count: usize) {
+    fn reset(&mut self, memory: Vec<i32>, count: usize) {
         self.memory = memory;
         self.count = count;
     }
@@ -160,3 +202,77 @@ impl AcsLocalVariables {
         &self.memory
     }
 }
+
+struct ZDoomBehaviour {
+    pub map_vars,
+    level: Option<&FLevelLocals>,
+    data: Option<Vec<u8>>,
+    chunks: Option<Vec<u8>>,
+    scripts: Option<Vec<WADLevelScriptInfoMemory>>,
+    functions: Option<Vec<ScriptFunction>>,
+    function_profile_data: Option<AcsProfileInfo>,
+    array_store: Option<ArrayInfo>,
+    arrays: Option<[ArrayInfo]>,
+    format: Acs,
+    lump_num: i32,
+    data_size: i32,
+    script_count: i32,
+    function_count: i32,
+    array_count: i32,
+    total_array_count: i32,
+    string_table: u32,
+    library_id: u32,
+    should_localize: bool,
+    map_var_store: [i32;128],
+    imports: Option<Vec<ZDoomBehaviour>>,
+    module_name: [u8;9],
+    jump_points: Option<Vec<i32>>,
+
+}
+
+impl ZDoomBehaviour {
+    fn new() -> Self {
+        Self { 
+            script_count: 0, 
+            function_count: 0, 
+            array_count: 0, 
+            total_array_count: 0, 
+            scripts: None, 
+            functions: None, 
+            arrays: None, 
+            array_store: None, 
+            chunks: None, 
+            data: None, 
+            format: Acs::AcsUnkown, 
+            lump_num: -1, 
+            map_var_store: [0;128], 
+            module_name: [0, 9], 
+            function_profile_data: None,
+
+            map_vars: (), 
+            level: None,
+            data_size: 0, 
+            string_table: 0, 
+            library_id: 0, 
+            should_localize: false, 
+            imports: None, 
+            jump_points: None 
+        }
+    }
+}
+
+struct ArrayInfo<'a> {
+    size: u32,
+    elements: Option<&'a[i32]>
+}
+
+struct ScriptFunction<'a> {
+    arg_count: u8,
+    has_return_value: u8,
+    import_num: u8,
+    local_count: i32,
+    address: u32,
+    local_arrays: AcsLocalArrays<'a>
+}
+
+struct BehaviorContainer {}
