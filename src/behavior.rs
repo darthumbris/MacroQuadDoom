@@ -4,6 +4,7 @@ use std::ops::Index;
 use std::cmp::Ordering;
 pub mod parse_behavior;
 pub use crate::parser::*;
+use crate::level::LevelLocals;
 
 #[derive(PartialEq)]
 enum Acs{
@@ -203,16 +204,16 @@ impl AcsLocalVariables {
     }
 }
 
-struct ZDoomBehaviour {
-    pub map_vars,
-    level: Option<&FLevelLocals>,
+struct ZDoomBehaviour<'a, 'b, 'c, 'd, 'e> {
+    // pub map_vars,
+    level: Option<&'a LevelLocals>,
     data: Option<Vec<u8>>,
     chunks: Option<Vec<u8>>,
-    scripts: Option<Vec<WADLevelScriptInfoMemory>>,
-    functions: Option<Vec<ScriptFunction>>,
+    scripts: Option<Vec<WADLevelScriptInfoMemory<'e>>>,
+    functions: Option<Vec<ScriptFunction<'d>>>,
     function_profile_data: Option<AcsProfileInfo>,
-    array_store: Option<ArrayInfo>,
-    arrays: Option<[ArrayInfo]>,
+    array_store: Option<ArrayInfo<'b>>,
+    arrays: Option<[ArrayInfo<'c>]>,
     format: Acs,
     lump_num: i32,
     data_size: i32,
@@ -230,7 +231,7 @@ struct ZDoomBehaviour {
 
 }
 
-impl ZDoomBehaviour {
+impl ZDoomBehaviour<'_, '_, '_, '_, '_> {
     fn new() -> Self {
         Self { 
             script_count: 0, 
@@ -249,7 +250,7 @@ impl ZDoomBehaviour {
             module_name: [0, 9], 
             function_profile_data: None,
 
-            map_vars: (), 
+            // map_vars: (), 
             level: None,
             data_size: 0, 
             string_table: 0, 

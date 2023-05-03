@@ -1,14 +1,18 @@
-use std::collections::HashMap;
+mod level_mesh;
+mod level_elements;
+mod level_lightmap;
+mod level_portal;
+mod level_actor;
 
 //TODO split this up in multiple structs (level stats, music, lights etc)
 //TODO give everything types
 //TODO see what is needed etc
 
-struct LevelLocals {
+pub struct LevelLocals {
     level,
 
     process_mask: PortalBits,
-    found_portals: Vec<LinePortal>,
+    found_portals: Vec<Box<LinePortal>>,
     groups_to_check: Vec<i32>,
 
     //level elements
@@ -22,14 +26,14 @@ struct LevelLocals {
     portal_info: PortalInfo,
     sections: SectionContainer,
     canvas_tex_info: CanvasTextureInfo,
-    local_event_manager: EventManager,
-    aabb_tree: AABBTree,
-    level_mesh: LevelMesh,
+    local_event_manager: Box<EventManager>,
+    aabb_tree: Box<AABBTree>,
+    level_mesh: Box<LevelMesh>,
 
     health_groups: HashMap<i32, HealthGroup>,
 
     block_map: BlockMap,
-    poly_block_map: Vec<PolyBlock>,
+    poly_block_map: Vec<Box<PolyBlock>>,
     udmf_keys: [HashMap<i32, UDMFKeys>;4],
 
 
@@ -43,9 +47,9 @@ struct LevelLocals {
 
     behaviors: BehaviorContainer,
 
-    tid_hash: [AActor; 128],
+    tid_hash: [Box<Actor>; 128],
 
-    strife_dialogues: Vec<StrifeDialogueNode>,
+    strife_dialogues: Vec<Box<StrifeDialogueNode>>,
     dialogue_roots: HashMap<i32, i32>,
     class_roots: HashMap<String, i32>, //Fname?
     bot_info: CajunMaster,
@@ -56,7 +60,7 @@ struct LevelLocals {
 	i_compatflags: i32,
 	i_compatflags2: i32,
 
-	sector_marker: SectorMarker,
+	sector_marker: Box<SectorMarker>,
 
 	md5: [u8; 16],			// for savegame validation. If the MD5 does not match the savegame won't be loaded.
 	time: i32,			// time in the hub
@@ -67,7 +71,7 @@ struct LevelLocals {
 	sucktime: i32,
 	spawnindex: u32,
 
-	info: LevelInfo,
+	info: Box<LevelInfo>,
 	cluster: i32,
 	cluster_flags: i32,
 	level_num: i32,
@@ -78,7 +82,7 @@ struct LevelLocals {
     next_secret_map: String,
     author_name: String,
     f1_pic: String,
-	translator: Translator,
+	translator: Box<Translator>,
 	map_type: MapType,
 	tag_manager: TagManager,
     interpolator: Interpolator,
@@ -89,7 +93,7 @@ struct LevelLocals {
 	automap,
 	body_que_slot: i32,
 
-	players: [Player;8], //8 max players
+	players: [Box<Player>;8], //8 max players
 
 
     num_map_sections: i32,
@@ -141,7 +145,7 @@ struct LevelLocals {
     air_supply: i32,
     default_environment: i32,
 
-    sequence_list_head: SequenceNode,
+    sequence_list_head: Box<SequenceNode>,
 
     //particles
     oldest_particle: u32,
@@ -177,7 +181,7 @@ struct LevelLocals {
     no_texture_fill: bool,
     impact_decal_count: i32,
 
-    lights: DynamicLights,
+    lights: Box<DynamicLights>,
 
     corpse_queue,
     fraggle_script_thinker,
@@ -186,217 +190,27 @@ struct LevelLocals {
     spot_state,
 }
 
-struct LightMaps {
-    surfaces: Vec<LightMapSurface>,
-    tex_coords: Vec<f32>,
-    tex_count: i32,
-    tex_size: i32,
-    tex_data: Vec<u16>,
-}
-
-struct LightMapSurface {
-    type_: SurfaceType,
-    subsector: SubSector,
-    side: Side,
-    control_sector: Sector,
-    light_map_num: u32,
-    tex_coords: &Vec<f32>
-}
-
-enum SurfaceType {
-    STNull,
-	STMiddleWall,
-	STUpperWall,
-	STLowerWall,
-	STCeiling,
-	STFloor
-}
-
-struct SubSector {
-    sector: Sector,
-    polys: PolyNode,
-    bsp: MiniBSP,
-    first_line: Seg,
-    render_sector: Sector,
-    section: Section,
-    subsector_num: i32,
-    line_count: u32,
-    flags : u16,
-    map_section: i16,
-    
-    valid_count: i32,
-    hacked: u8,
-
-    portal_coverage: Option<[PortalCoverage;2]>,
-    light_map: [LightMapSurface;2]
-
-    //fn buildpolybsp
-    //fn index
-
-    //TODO implement the functions for subsector
-
-}
-
-struct Line {
-    v1: Vertex,
-    v2: Vertex,
-    delta: Vector2<f64>,
-
-    flags: u32,
-    flags2: u32,
-    activation: u32,
-    special: i32,
-    args: [i32;5],
-    alpha: f64,
-    sidedef: [Side;2],
-    bbox: [f64;4],
-    front_sector: Sector,
-    back_sector: Sector,
-    valid_count: i32,
-    lock_number: i32,
-    portal_index: u32,
-    portal_transfered: u32,
-    auto_map_style: AutoMapLineStyle,
-    health: i32,
-    health_group: i32,
-    line_num: i32,
-
-    //TODO functions
-}
-
-struct Side {
-    sector: Sector, //sector sidedef is facing
-    attached_decals: BaseDecal,
-    textures: [Part;3],
-    linedef: Line,
-    left_side: u32,
-    right_side: u32,
-    texel_length: u16,
-    light: i16,
-    tier_lights: [i16;3],
-    flags: u16,
-    udmf_index: i32,
-    light_head: LightNode,
-    lightmap: LightMapSurface,
-    segs: Vec<&Seg>, //all segs in ascending order
-    num_segs: i32,
-    side_num: i32,
-
-    //TODO functions, Part and BaseDecal struct
-}
-
-struct Vertex {
-    p: Vector2<f64>,
-
-    vertex_num: i32,
-    view_angle: Angle,
-    angle_time: i32,
-    dirty: bool,
-    num_heights: i32,
-    num_sectors: i32,
-    sectors: Vec<&Sector>,
-    height_list: &[f32],
-
-    //TODO functions and constructors etc
-}
-
-struct Sector {
-
-}
-
-struct Seg {
-
-}
-
-struct Section {
-
-}
 
 
-struct PolyNode {
 
-}
+
+struct Part {}
+
+struct BaseDecal {}
+
+struct AutoMapLineStyle {}
+
+struct PolyNode {}
+
+struct PolyObj {}
 
 struct MiniBSP {}
 
-
-
-struct PortalCoverage {
-    subsectors: Option<&[u32]>, //pointer to subsectors
-    subsector_count: i32
-}
-
-struct LightProbes {
-    light_probes: Vec<LightProbe>,
-    min_x: i32,
-    min_y: i32,
-    width: i32,
-    height: i32,
-    cell_size: i32, // = 32
-    cells: Vec<LightProbeCell>
-}
-
-struct LightProbe {
-    x: f32,
-    y: f32,
-    z: f32,
-    red: f32,
-    green: f32,
-    blue: f32
-}
-
-struct LightProbeCell {
-    first_probe: Option<&[LightProbe]>,
-    probe_count: i32
-}
-
-struct PortalInfo {
-    displacements: DisplacementTable,
-    portal_block_map: PortalBlockMap,
-    linked_portals: Vec<&LinePortal>,
-    portal_groups: Vec<&SectorPortalGroup>,
-    line_portal_spans: Vec<LinePortalSpan>,
-}
-
-struct DisplacementTable {}
-struct PortalBlockMap {}
-struct LinePortal {}
-struct SectorPortalGroup {}
-struct LinePortalSpan {}
-
-
-
+struct Angle {}
 
 struct PlayerStart {}
 struct Particle {}
 
-struct PortalBits {}
 
-struct LevelElements {
-    vertexes: Vec<Vertex>,
-    sectors: Vec<Sector>,
-    extsectors: Vec<ExtSector>,
-    line_buffer: Vec<Line>,
-    subsector_buffer: Vec<SubSector>,
-    lines: Vec<Line>,
-    sides: Vec<Side>,
-    seg_buffer: Vec<Seg>,
-    segs: Vec<Seg>,
-    subsectors: Vec<SubSector>,
-    nodes: Vec<Node>,
-    game_subsectors: Vec<SubSector>,
-    game_nodes: Vec<Node>,
-    head_game_node: Node,
-    reject_matrix: Vec<u8>,
-    z_zones: Vec<Zone>,
-    poly_objects: Vec<PolyObj>,
-    sector_portals: Vec<SectorPortal>,
-    line_portals: Vec<LinePortal>,
-}
-
-struct Vector2<T> {
-    x: T,
-    y: T
-}
 
 //TODO ExtSector, Sector, Seg

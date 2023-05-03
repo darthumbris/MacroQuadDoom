@@ -4,6 +4,8 @@ pub mod movement;
 pub mod render;
 pub mod player;
 pub mod parser;
+pub mod level;
+pub mod vector;
 
 pub mod behavior;
 
