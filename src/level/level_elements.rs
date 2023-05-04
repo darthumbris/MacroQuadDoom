@@ -2,18 +2,19 @@ use crate::vector::{Vector2, Transform};
 use super::level_lightmap::*;
 use super::level_portal::*;
 use super::level_mesh::SectorPlane;
-use super::{PolyNode, MiniBSP, Angle, AutoMapLineStyle, BaseDecal, Part, PolyObj, LevelLocals};
+use super::{PolyNode, MiniBSP, AutoMapLineStyle, BaseDecal, Part, PolyObj, LevelLocals};
 use super::level_actor::Actor;
+use super::level_texture::{TextureID, TextureManipulation};
 
 pub struct SubSector {
-    sector: Box<Sector>,
+    pub sector: Option<Box<Sector>>,
     polys: Box<PolyNode>,
     bsp: Box<MiniBSP>,
-    first_line: Box<Seg>,
+    pub first_line: Vec<Box<Seg>>,
     render_sector: Box<Sector>,
     section: Box<Section>,
     subsector_num: i32,
-    line_count: u32,
+    pub line_count: u32,
     flags : u16,
     map_section: i16,
     
@@ -30,9 +31,9 @@ pub struct SubSector {
 
 }
 
-struct Line {
-    v1: Vertex,
-    v2: Vertex,
+pub struct Line {
+    pub v1: Vertex,
+    pub v2: Vertex,
     delta: Vector2<f64>,
 
     flags: u32,
@@ -41,10 +42,10 @@ struct Line {
     special: i32,
     args: [i32;5],
     alpha: f64,
-    sidedef: [Box<Side>;2],
+    sidedef: [Option<Box<Side>>;2],
     bbox: [f64;4],
-    front_sector: Box<Sector>,
-    back_sector: Box<Sector>,
+    pub front_sector: Option<Box<Sector>>,
+    pub back_sector: Option<Box<Sector>>,
     valid_count: i32,
     lock_number: i32,
     portal_index: u32,
@@ -58,10 +59,10 @@ struct Line {
 }
 
 pub struct Side {
-    sector: Box<Sector>, //sector sidedef is facing
+    pub sector: Box<Sector>, //sector sidedef is facing //geen option
     attached_decals: Box<BaseDecal>,
     textures: [Part;3],
-    linedef: Box<Line>,
+    pub linedef: Box<Line>, //is geen option
     left_side: u32,
     right_side: u32,
     texel_length: u16,
@@ -76,6 +77,30 @@ pub struct Side {
     side_num: i32,
 
     //TODO functions, Part and BaseDecal struct
+}
+
+impl Side {
+    pub fn v1(&self) -> &Vertex {
+        if self.linedef.sidedef[0].is_some() {
+            return &self.linedef.v1
+        }
+        else {
+            return &self.linedef.v2
+        }
+    }
+
+    pub fn v2(&self) -> &Vertex {
+        if self.linedef.sidedef[0].is_some() {
+            return &self.linedef.v2
+        }
+        else {
+            return &self.linedef.v1
+        }
+    }
+
+    pub fn index(&self) -> i32{
+        self.side_num
+    }
 }
 
 struct Vertex {
@@ -93,12 +118,18 @@ struct Vertex {
     //TODO functions and constructors etc
 }
 
+impl Vertex {
+    pub fn f_pos(&self) -> Vector2<f64>{
+        self.p
+    }
+}
+
 pub struct Sector {
     splane: [Splane;2],
     level: Box<LevelLocals>,
-    e: ExtSector,
-    floorplane: SectorPlane,
-    ceilingplane: SectorPlane,
+    pub e: Box<ExtSector>, //geen option
+    pub floorplane: SectorPlane,
+    pub ceilingplane: SectorPlane,
     center_spot: Vector2<f64>,
     lines: Vec<Box<Line>>,
     height_sec: Option<Box<Sector>>,
@@ -145,19 +176,19 @@ pub struct Sector {
     has_light_map: bool,
 
     //Stuff not to do with renderer
-    sound_target,
+    //TODO sound_target, 
     thing_list: Vec<Actor>,
     gravity: f64, //1.0 is normal?
 
-    floor_data,
-    ceiling_data,
-    lighting_data,
+    //TODO floor_data,
+    //TODO ceiling_data,
+    //TODO lighting_data,
 
-    interpolations: [;4],
+    //TODO interpolations: [;4],
 
     touching_thing_list: Vec<SecNode>,
 
-    sec_act_target,
+    //TODO sec_act_target,
 
     friction: f64,
     move_factor: f64,
@@ -187,27 +218,92 @@ pub struct Sector {
     health_3d_group: i32,
 }
 
-struct Seg {
+impl Sector {
+    pub fn GetTexture(&self, pos: usize) -> TextureID {
+        self.splane[pos].texture
+    }
+}
 
+#[derive(PartialEq)]
+pub enum SectorE {
+    Floor = 0,
+    Ceiling = 1,
+    WallTop,
+    WallBottom,
+    Sprites
+}
+
+struct Seg {
+    pub v1: Box<Vertex>,
+    pub v2: Box<Vertex>,
+    sidedef: Box<Side>,
+    linedef: Box<Line>,
+
+    front_sector: Box<Sector>,
+    back_sector: Option<Box<Sector>>,
+
+    side_frac: f32,
+    seg_num: i32,
 }
 
 struct Section {
 
 }
 
-struct ExtSector {}
+struct ExtSector {
+    pub x_floor: XFloor,//3Dfloors
+    fake_floor: Vec<Box<Sector>>,
+    mid_tex: MidTex,
+    linked: LinkedSectors
+}
 
-struct LevelElements {
+struct XFloor {
+    pub f_floors: Vec<Box<Floor3D>>,
+    light_list: Vec<LightList>,
+    attached: Vec<Box<Sector>>
+}
+
+struct Floor3D {
+    pub model: Box<Sector>
+}
+struct LightList {}
+
+struct MidTex {
+    floor: Plane,
+    ceiling: Plane
+}
+
+struct Plane {
+    attached_sectors: Vec<Box<Sector>>,
+    attached_lines: Vec<Box<Line>>
+}
+
+struct Linked {
+    floor: LinkedSectors,
+    ceiling: LinkedSectors
+}
+
+struct LinkedSectors {
+    sectors: Vec<LinkedSector>
+}
+
+#[derive(Default)]
+struct LinkedSector {
+    sector: Option<Box<Sector>>,
+    type_: i32
+}
+
+pub struct LevelElements {
     vertexes: Vec<Vertex>,
     sectors: Vec<Sector>,
     extsectors: Vec<ExtSector>,
     line_buffer: Vec<Box<Line>>,
     subsector_buffer: Vec<Box<SubSector>>,
     lines: Vec<Line>,
-    sides: Vec<Side>,
+    pub sides: Vec<Side>,
     seg_buffer: Vec<Box<Seg>>,
     segs: Vec<Seg>,
-    subsectors: Vec<SubSector>,
+    pub subsectors: Vec<SubSector>,
     nodes: Vec<Node>,
     game_subsectors: Vec<SubSector>,
     game_nodes: Vec<Node>,
@@ -220,6 +316,8 @@ struct LevelElements {
 }
 
 struct Zone {}
+
+struct Node {}
 
 struct Splane {
     x_form: Transform,
@@ -234,7 +332,7 @@ struct Splane {
 }
 
 struct SecNode{
-    sector: &Sector,
+    sector: Box<Sector>,
     thing: Actor,
     thing_prev: Box<SecNode>,
     thing_next: Box<SecNode>,
@@ -242,6 +340,10 @@ struct SecNode{
     sec_next: Box<SecNode>,
     visited: bool
 }
+
+pub struct SectorMarker {}
+
+pub struct UDMFKeys {}
 
 
 //TODO TObjPtr and DObject what they do

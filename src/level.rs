@@ -1,22 +1,39 @@
+use std::collections::HashMap;
+use crate::vector::Vector2;
+
 mod level_mesh;
 mod level_elements;
 mod level_lightmap;
 mod level_portal;
 mod level_actor;
+mod level_texture;
+mod level_light;
+mod level_bsp;
+mod level_poly;
+
+use level_portal::*;
+use level_elements::*;
+use level_lightmap::*;
+use level_mesh::LevelMesh;
+use level_texture::*;
+use level_light::*;
+use level_actor::*;
+use level_bsp::*;
+use level_poly::*;
 
 //TODO split this up in multiple structs (level stats, music, lights etc)
 //TODO give everything types
 //TODO see what is needed etc
 
 pub struct LevelLocals {
-    level,
+    //TODO level,
 
     process_mask: PortalBits,
     found_portals: Vec<Box<LinePortal>>,
     groups_to_check: Vec<i32>,
 
     //level elements
-    elements: LevelElements,
+    pub elements: LevelElements,
 
     //lightmaps
     lm: LightMaps,
@@ -24,7 +41,7 @@ pub struct LevelLocals {
 
     //portal info
     portal_info: PortalInfo,
-    sections: SectionContainer,
+    //TODO sections: SectionContainer,
     canvas_tex_info: CanvasTextureInfo,
     local_event_manager: Box<EventManager>,
     aabb_tree: Box<AABBTree>,
@@ -82,15 +99,15 @@ pub struct LevelLocals {
     next_secret_map: String,
     author_name: String,
     f1_pic: String,
-	translator: Box<Translator>,
-	map_type: MapType,
-	tag_manager: TagManager,
-    interpolator: Interpolator,
+	//TODO translator: Box<Translator>,
+	//TODO map_type: MapType,
+	//TODO tag_manager: TagManager,
+    //TODO interpolator: Interpolator,
 
 	shader_start_time: u64,
 
-	body_que,
-	automap,
+	//TODO body_que,
+	//TODO automap,
 	body_que_slot: i32,
 
 	players: [Box<Player>;8], //8 max players
@@ -183,11 +200,11 @@ pub struct LevelLocals {
 
     lights: Box<DynamicLights>,
 
-    corpse_queue,
-    fraggle_script_thinker,
-    acs_thinker,
+    //TODO corpse_queue,
+    //TODO fraggle_script_thinker,
+    //TODO acs_thinker,
 
-    spot_state,
+    //TODO spot_state,
 }
 
 
@@ -200,16 +217,9 @@ struct BaseDecal {}
 
 struct AutoMapLineStyle {}
 
-struct PolyNode {}
-
-struct PolyObj {}
-
-struct MiniBSP {}
-
-struct Angle {}
-
-struct PlayerStart {}
 struct Particle {}
+
+struct LevelInfo {}
 
 
 

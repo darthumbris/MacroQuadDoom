@@ -1,6 +1,7 @@
+
 pub struct Vector2<T> {
-    x: T,
-    y: T
+    pub x: T,
+    pub y: T
 }
 
 pub struct Vector3<T> {
@@ -21,4 +22,18 @@ pub struct Transform {
     y_scale: f64,
     angle: Angle<f64>,
     base_angle: Angle<f64>
+}
+
+impl Vector2<f32> {
+    
+    pub fn length(&self) -> f32 {
+        f32::sqrt(self.x * self.x + self.y * self.y)
+    }
+}
+
+impl Vector2<f64> {
+    
+    pub fn length(&self) -> f64 {
+        f64::sqrt(self.x * self.x + self.y * self.y)
+    }
 }
