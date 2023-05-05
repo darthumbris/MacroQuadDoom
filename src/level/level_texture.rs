@@ -2,7 +2,7 @@ pub struct CanvasTextureInfo {
 
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct TextureID {
     tex_num: i32
 }

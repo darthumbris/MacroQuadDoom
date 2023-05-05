@@ -417,7 +417,7 @@ impl LevelMesh {
 
         //TODO get sky_flat_num from somewehere?
         let temp_sky_num = TextureID{tex_num: 0}; //TODO ^
-        sector.GetTexture(SectorE::Ceiling as usize) == temp_sky_num
+        sector.get_texture(SectorE::Ceiling as usize) == temp_sky_num
     }
     
     fn is_control_sector(sector: &Sector) -> bool {false}

@@ -101,22 +101,24 @@ fn find_script(number: i16, scripts: Vec<WADLevelScriptInfoMemory>) -> Result<us
     return scripts.binary_search(&script)
 }
 
-fn sort_scripts(a: WADLevelScriptInfoMemory, b: WADLevelScriptInfoMemory) -> Ordering {
+fn sort_scripts(a: &WADLevelScriptInfoMemory, b: &WADLevelScriptInfoMemory) -> Ordering {
     return a.number.cmp(&b.number)
 }
+
+//  fn(&'a behavior::WADLevelScriptInfoMemory, &'b behavior::WADLevelScriptInfoMemory)
 
 fn load_directory(data: &Vec<u8>, format: Acs) {
 
     let mut offset = 0;
     let mut script_count = 0;
-    let mut scripts: Vec<WADLevelScriptInfoMemory>;
+    let mut scripts: Vec<WADLevelScriptInfoMemory> = vec![];
     match format {
         Acs::AcsOld => {
             let inf_offset = read_int(data, &mut offset).unwrap();
             offset = inf_offset as usize;
             script_count = read_int(data, &mut offset).unwrap();
             if script_count != 0 {
-                let mut scripts: Vec<WADLevelScriptInfoMemory> = Vec::with_capacity(script_count as usize);
+                scripts.reserve(script_count as usize);
 
                 for _i in 0..script_count {
                     let ptr2: WADLevelScriptInfoMemory;
@@ -148,7 +150,7 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
             else if read_uint(data, &mut offset).unwrap() != 0x41435300 { //ACS\0
                 script_count = read_int(data, &mut offset).unwrap() / 12;
 
-                scripts = Vec::with_capacity(script_count as usize);
+                scripts.reserve(script_count as usize);
                 offset += 4; //? maybe 8?
                 for _i in 0..script_count {
                     let ptr2: WADLevelScriptInfoMemory;
@@ -174,7 +176,7 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
             else {
                 script_count = read_int(data, &mut offset).unwrap() / 8;
 
-                scripts = Vec::with_capacity(script_count as usize);
+                scripts.reserve(script_count as usize);
                 offset += 4; //? maybe 8?
                 for _i in 0..script_count {
                     let ptr2: WADLevelScriptInfoMemory;
@@ -198,13 +200,13 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
                 }
             }
         }
-        _ => {scripts = vec![];}
+        _ => {}
     }
     if script_count > 1 {
         scripts.sort_by(sort_scripts);
 
         if format == Acs::AcsOld {
-            for i in 0..script_count - 1 {
+            for i in 0..(script_count - 1) as usize {
                 if scripts[i].number == scripts[i + 1].number {
                     println!("{} has a duplicate", scripts[i].number);
                     if scripts[i].type_ == 0 { //Script closed
@@ -221,11 +223,11 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
     if chunk.is_some() {
         offset = 0;
         let max = read_int(&chunk.unwrap(), &mut offset).unwrap() / 4;
-        for i in (0..max).rev() {
+        for _i in (0..max).rev() {
             let number = read_short(&chunk.unwrap(), &mut offset).unwrap();
             let index = find_script(number, scripts);
             if index.is_ok() {
-                scripts[index.ok()].flags = read_short(&chunk.unwrap(), &mut offset).unwrap();
+                scripts[index.unwrap()].flags = read_ushort(&chunk.unwrap(), &mut offset).unwrap();
             }
             else {offset += 2}
         }
@@ -239,20 +241,20 @@ fn load_directory(data: &Vec<u8>, format: Acs) {
             let number = read_short(&chunk.unwrap(), &mut offset).unwrap();
             let index = find_script(number, scripts);
             if index.is_ok() {
-                scripts[index.ok()].var_count = read_short(&chunk.unwrap(), &mut offset).unwrap();
+                scripts[index.unwrap()].var_count = read_ushort(&chunk.unwrap(), &mut offset).unwrap();
             }
             else {offset += 2}
         }
     }
     chunk = find_chunk(data, 0x53415259);
-    while chunk.is_some() { //SVCT
-        offset = 4;
-        let size = read_int(chunk, &mut offset).unwrap();
-        if size >= 6 {
-            let script_num = read_int(chunk, &mut offset).unwrap();
-        }
+    // while chunk.is_some() { //SVCT
+    //     offset = 4;
+    //     let size = read_int(chunk, &mut offset).unwrap();
+    //     if size >= 6 {
+    //         let script_num = read_int(chunk, &mut offset).unwrap();
+    //     }
 
-        // chunk = next_chunk(); //TODO finish the parsing of the behavior
-    } 
+    //     // chunk = next_chunk(); //TODO finish the parsing of the behavior
+    // }
 
 }

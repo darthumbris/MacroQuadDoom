@@ -1,13 +1,13 @@
 use bitreader::BitReader;
 
 use crate::parser::*;
-use crate::behavior::parse_behavior::parse_behavior;
+// use crate::behavior::parse_behavior::parse_behavior;
 
 struct WADLevelBlockmap {
-    x: i16,
-    y: i16,
-    num_cols: i16,
-    num_rows: i16,
+    x: u16,
+    y: u16,
+    num_cols: u16,
+    num_rows: u16,
     blocklists: Vec<Vec<u16>>
 }
 
@@ -112,7 +112,8 @@ struct WADLevelNode {
     left_child: i16
 }
 
-struct WADLevel {
+//TODO this should be in a udmf format 
+pub struct WADLevel {
     name: String,
     things: Vec<WADLevelThing>,
     linedefs: Vec<WADLevelLinedef>,
@@ -122,8 +123,9 @@ struct WADLevel {
     ssectors: Vec<WADLevelSubSector>,
     nodes: Vec<WADLevelNode>, //udmf stores the nodes in znodes
     sectors: Vec<WADLevelSector>,
-    blockmap: WADLevelBlockmap,
-    reject: Vec<Vec<bool>>
+    // blockmap: WADLevelBlockmap,
+    reject: Vec<Vec<bool>>,
+    format: Format
     // behavior, (HEXEN and udmf only)
     // znodes (udmf only)
 }
@@ -272,7 +274,7 @@ fn parse_linedefs(lump: &Vec<u8>) -> Vec<WADLevelLinedef> {
 fn parse_sidedefs(lump: &Vec<u8>) -> Vec<WADLevelSidedef> {
     let mut sidedefs: Vec<WADLevelSidedef> = vec![];
 
-    let entry_len = 12;
+    let entry_len = 30;
     let len = lump.len() / entry_len;
     let mut offset: usize = 0;
     for _i in 0..len {
@@ -432,25 +434,27 @@ fn parse_sectors(lump: &Vec<u8>) -> Vec<WADLevelSector> {
     sectors
 }
 
+//TODO see if this is even needed
 fn parse_blockmap(lump: &Vec<u8>) -> WADLevelBlockmap {
     let mut offset: usize = 0;
 
-    let x = read_short(lump, &mut offset).unwrap();
-    let y = read_short(lump, &mut offset).unwrap();
-    let num_cols = read_short(lump, &mut offset).unwrap();
-    let num_rows = read_short(lump, &mut offset).unwrap();
+    let x = read_ushort(lump, &mut offset).unwrap();
+    let y = read_ushort(lump, &mut offset).unwrap();
+    let num_cols = read_ushort(lump, &mut offset).unwrap();
+    let num_rows = read_ushort(lump, &mut offset).unwrap();
 
-    let num_blocks: i32 = i32::from(num_cols) * i32::from(num_rows);
+    let num_blocks: u32 = u32::from(num_cols) * u32::from(num_rows);
     let mut blocklists: Vec<Vec<u16>> = vec![];
     let mut blocklist_offsets: Vec<u16> = vec![];
     for _i in 0..num_blocks {
-        blocklist_offsets.push(read_ushort(lump, &mut offset).unwrap());
+        let block_offset = read_ushort(lump, &mut offset).unwrap();
+        blocklist_offsets.push(block_offset);
     }
     for i in 0..blocklist_offsets.len() {
         let mut blocklist: Vec<u16> = vec![];
 
         offset = blocklist_offsets[i] as usize;
-        read_ushort(lump, &mut offset).unwrap(); //skip the first 0x0000 start of the blocklist
+        read_ushort(lump, &mut offset).unwrap();//skip the first 0x0000 start of the blocklist
 
         let mut linedef_index = read_ushort(lump, &mut offset).unwrap();
         while linedef_index != 65535 {
@@ -470,11 +474,7 @@ fn parse_blockmap(lump: &Vec<u8>) -> WADLevelBlockmap {
 }
 
 fn parse_rejects(lump: &Vec<u8>, sector_size: usize) -> Vec<Vec<bool>> {
-    let mut rejects: Vec<Vec<bool>> = vec![];
-    for _i in 0..sector_size {
-        let reject: Vec<bool> = Vec::with_capacity(sector_size);
-        rejects.push(reject);
-    }
+    let mut rejects: Vec<Vec<bool>> = vec![vec![false; sector_size]; sector_size];
     let mut col = 0;
     let mut row = 0;
 
@@ -522,40 +522,30 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         else {format = Format::DOOM;}
     }
 
-    let name = &wad_parsed.directory[index].name;
+    println!("index of blockmap: {}, len: {}, name: {}", wad_parsed.lump_map.get("BLOCKMAP").unwrap(), wad_parsed.lump_map.len(), wad_parsed.directory[104].name);
+
+    let name = wad_parsed.directory[index].name.to_string();
     if format == Format::DOOM || format == Format::HEXEN {
+        let things;
+        let linedefs;
         let sidedefs = parse_sidedefs(&get_map_lump("SIDEDEFS".to_owned(), wad_parsed, wad_data));
         let vertexes = parse_vertexes(&get_map_lump("VERTEXES".to_owned(), wad_parsed, wad_data));
         let segs = parse_segs(&get_map_lump("SEGS".to_owned(), wad_parsed, wad_data));
         let ssectors = parse_subsectors(&get_map_lump("SSECTORS".to_owned(), wad_parsed, wad_data));
         let nodes = parse_nodes(&get_map_lump("NODES".to_owned(), wad_parsed, wad_data));
         let sectors = parse_sectors(&get_map_lump("SECTORS".to_owned(), wad_parsed, wad_data));
-        let blockmap = parse_blockmap(&get_map_lump("BLOCKMAP".to_owned(), wad_parsed, wad_data));
+        // let blockmap = parse_blockmap(&get_map_lump("BLOCKMAP".to_owned(), wad_parsed, wad_data));
         let reject = parse_rejects(&get_map_lump("REJECT".to_owned(), wad_parsed, wad_data), sectors.len());
+        if format == Format::DOOM {
+            things = parse_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
+            linedefs = parse_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
+        }
+        else if format == Format::HEXEN {
+            things = parse_hexen_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
+            linedefs = parse_hexen_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
+        }
     }
-    if format == Format::DOOM {
-        let things = parse_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
-        let linedefs = parse_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
-        
-    }
-    if format == Format::HEXEN {
-        let things = parse_hexen_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
-        let linedefs = parse_hexen_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
-        let behavior = parse_behavior(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
-    }
-
-    
-    // let level = WADLevel {
-    //     name,
-    //     things,
-    //     linedefs,
-    //     sidedefs,
-    //     vertexes,
-    //     segs,
-    //     ssectors,
-    //     nodes,
-    //     sectors,
-    //     blockmap,
-    //     reject
-    // };
+    //TODO check for udmf
 }

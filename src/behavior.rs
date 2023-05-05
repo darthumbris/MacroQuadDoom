@@ -2,7 +2,7 @@
 use std::ops::IndexMut;
 use std::ops::Index;
 use std::cmp::Ordering;
-pub mod parse_behavior;
+// pub mod parse_behavior;
 pub use crate::parser::*;
 use crate::level::LevelLocals;
 
@@ -133,7 +133,7 @@ impl AcsProfileInfo {
 #[derive(Clone, PartialEq, Eq)]
 struct AcsLocalArrays {
     count : u32,
-    info: Option<Vec<AcsLocalArrayInfo>>
+    info: Vec<AcsLocalArrayInfo>
 
     //destructor
 }
@@ -142,21 +142,21 @@ impl AcsLocalArrays {
     pub fn new() -> Self {
         Self {
             count: 0,
-            info: None
+            info: vec![]
         }
     }
 
     //destructor?
 
     pub fn set(&self, locals: &mut AcsLocalVariables, array_num: i32, array_entry: i32, value: i32) {
-        if (array_num as u32) < self.count && (array_entry as u32) < self.info.unwrap()[array_num as usize].size {
-            locals[self.info.unwrap()[array_num as usize].offset as usize + array_entry as usize] = value;
+        if (array_num as u32) < self.count && (array_entry as u32) < self.info[array_num as usize].size {
+            locals[self.info[array_num as usize].offset as usize + array_entry as usize] = value;
         }
     }
 
     pub fn get(&self, locals: &AcsLocalVariables, array_num: i32, array_entry: i32) -> i32 {
-        if (array_num as u32) < self.count && (array_entry as u32) < self.info.unwrap()[array_num as usize].size {
-            return locals[self.info.unwrap()[array_num as usize].offset as usize + array_entry as usize];
+        if (array_num as u32) < self.count && (array_entry as u32) < self.info[array_num as usize].size {
+            return locals[self.info[array_num as usize].offset as usize + array_entry as usize];
         }
         0
     }
@@ -199,7 +199,7 @@ impl AcsLocalVariables {
         self.count = count;
     }
 
-    fn getPointer(&self) -> &Vec<i32> {
+    fn get_pointer(&self) -> &Vec<i32> {
         &self.memory
     }
 }

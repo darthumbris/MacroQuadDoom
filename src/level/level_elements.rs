@@ -1,7 +1,7 @@
 use crate::vector::{Vector2, Transform};
 use super::level_lightmap::*;
 use super::level_portal::*;
-use super::level_mesh::SectorPlane;
+// use super::level_mesh::SectorPlane;
 use super::{PolyNode, MiniBSP, AutoMapLineStyle, BaseDecal, Part, PolyObj, LevelLocals};
 use super::level_actor::Actor;
 use super::level_texture::{TextureID, TextureManipulation};
@@ -103,7 +103,7 @@ impl Side {
     }
 }
 
-struct Vertex {
+pub struct Vertex {
     p: Vector2<f64>,
 
     vertex_num: i32,
@@ -127,9 +127,9 @@ impl Vertex {
 pub struct Sector {
     splane: [Splane;2],
     level: Box<LevelLocals>,
-    pub e: Box<ExtSector>, //geen option
-    pub floorplane: SectorPlane,
-    pub ceilingplane: SectorPlane,
+    // pub e: Box<ExtSector>, //geen option
+    // pub floorplane: SectorPlane,
+    // pub ceilingplane: SectorPlane,
     center_spot: Vector2<f64>,
     lines: Vec<Box<Line>>,
     height_sec: Option<Box<Sector>>,
@@ -219,7 +219,7 @@ pub struct Sector {
 }
 
 impl Sector {
-    pub fn GetTexture(&self, pos: usize) -> TextureID {
+    pub fn get_texture(&self, pos: usize) -> TextureID {
         self.splane[pos].texture
     }
 }
@@ -233,7 +233,7 @@ pub enum SectorE {
     Sprites
 }
 
-struct Seg {
+pub struct Seg {
     pub v1: Box<Vertex>,
     pub v2: Box<Vertex>,
     sidedef: Box<Side>,

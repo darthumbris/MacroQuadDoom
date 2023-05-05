@@ -97,61 +97,45 @@ pub struct WADData {
     palletes: Vec<Vec<WADPaletteColor>>,
     color_maps: Vec<Vec<u8>>,
     sprites: Vec<(String, WADSprite)>,
-    flats: Vec<u8>
+    flats: Vec<u8>,
+    levels: Vec<WADLevel>
 }
-
-
-
 
 fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
-    let mut wad_header = WADHeader{
-        map_type: String::from(""),
-        lump_count: 0,
-        directory_offset: 0
-    };
-    copy_and_capitalize_buffer(&mut wad_header.map_type, wad_data, offset, 4);
-	wad_header.lump_count = read_uint(wad_data, offset).unwrap();
-	wad_header.directory_offset = read_uint(wad_data, offset).unwrap();
-    println!("type: {}", wad_header.map_type);
-    println!("numlumps: {}", wad_header.lump_count);
-    println!("infotableofs: {}", wad_header.directory_offset);
-    wad_header
+    let mut map_type = String::new();
+    copy_and_capitalize_buffer(&mut map_type, wad_data, offset, 4);
+	let lump_count = read_uint(wad_data, offset).unwrap();
+	let directory_offset = read_uint(wad_data, offset).unwrap();
+    WADHeader{map_type, lump_count, directory_offset}
 }
 
-fn read_directory(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
+fn read_directory(wad_data: &Vec<u8>, offset_: &mut usize, wad_parsed: &mut WADData) {
     for i in 0 .. wad_parsed.wad_header.lump_count {
-        let mut wad_entry = WADEntry{
-            name: String::from(""),
-            size: 0,
-            offset: 0
-        };
-        wad_entry.offset = read_uint(wad_data, offset).unwrap();
-        wad_entry.size = read_uint(wad_data, offset).unwrap();
-        copy_and_capitalize_buffer(&mut wad_entry.name, wad_data, offset, 8);
-        // println!("offset: {}", wad_entry.offset);
-        // println!("size: {}", wad_entry.size);
-        // println!("name: {}", wad_entry.name);
-        wad_parsed.lump_map.insert(wad_entry.name.clone(), i);
-        wad_parsed.directory.push(wad_entry);
+        let mut name: String = String::new();
+        let offset = read_uint(wad_data, offset_).unwrap();
+        let size = read_uint(wad_data, offset_).unwrap();
+        copy_and_capitalize_buffer(&mut name, wad_data, offset_, 8);
+        wad_parsed.lump_map.insert(name.clone(), i);
+        wad_parsed.directory.push(WADEntry { offset, size, name });
     }
 }
 
 fn header_check(data: &Vec<u8>, header: &str, offset: usize) ->bool {
     for (i, c) in header.bytes().enumerate() {
-        if c != data[offset + i] {return false;}
+        if c != data[offset + i] {return false}
     }
-    return true;
+    true
 }
 
 fn data_lump(name: &str) -> LumpTypes {
     match name {
-        "PLAYPAL" => return LumpTypes::PlayPal,
-        "COLORMAP" => return LumpTypes::ColorMap,
-        "TEXTURE1" => return  LumpTypes::Texture1,
-        "TEXTURE2" => return  LumpTypes::Texture2,
-        "PNAMES" => return LumpTypes::PNames,
-        "ENDOOM" => return LumpTypes::EndDoom,
-        _ => return LumpTypes::ERROR
+        "PLAYPAL"   => return LumpTypes::PlayPal,
+        "COLORMAP"  => return LumpTypes::ColorMap,
+        "TEXTURE1"  => return  LumpTypes::Texture1,
+        "TEXTURE2"  => return  LumpTypes::Texture2,
+        "PNAMES"    => return LumpTypes::PNames,
+        "ENDOOM"    => return LumpTypes::EndDoom,
+        _           => return LumpTypes::ERROR
     }
 }
 
@@ -170,40 +154,34 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
     //Data based lump detection
     if wad_parsed.directory[index].size != 0 {
         let offset = wad_parsed.directory[index].offset as usize;
-        if header_check(data, "MThd", offset) {
-            return LumpTypes::MIDI;
-        }    
-        if header_check(data, "ID3", offset) {
-            return LumpTypes::MP3;
-        }
-        if header_check(data, "MUS", offset) {
-            return LumpTypes::MUS;
-        }
-        if header_check(data, "PNG", offset) {
-            return LumpTypes::PNG;
-        }
+        if header_check(data, "MThd", offset) {return LumpTypes::MIDI;}
+        if header_check(data, "ID3", offset) {return LumpTypes::MP3;}
+        if header_check(data, "MUS", offset) {return LumpTypes::MUS;}
+        if header_check(data, "PNG", offset) {return LumpTypes::PNG;}
     }
     
     //Name based detection
     let name = wad_parsed.directory[index].name.clone();
-    if text_lumps.contains(&name.as_str()) {return LumpTypes::Text;}
-    if map_lumps.contains(&name.as_str()) {return LumpTypes::MapData;}
+    if text_lumps.contains(&name.as_str()) {return LumpTypes::Text}
+    if map_lumps.contains(&name.as_str()) {return LumpTypes::MapData}
     if data_lumps.contains(&name.as_str()) {return data_lump(&name.as_str())}
-    if name.starts_with("MAP") && name.len() > 3 && name.chars().nth(3).unwrap() >= '0' && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map;}
-    if name.starts_with("E") && name.len() > 3 && name.chars().nth(1).unwrap() >= '0' && name.chars().nth(1).unwrap() <= '9' && name.chars().nth(2).unwrap() == 'M' &&
-        name.chars().nth(3).unwrap() >= '0' && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map;}
-    if name.ends_with("_START") {return LumpTypes::Marker;}
-    if name.ends_with("_END") {return LumpTypes::Marker;}
+    if name.starts_with("MAP") && name.len() > 3 && name.chars().nth(3).unwrap() >= '0' 
+        && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map}
+    if name.starts_with("E") && name.len() > 3 && name.chars().nth(1).unwrap() >= '0' 
+        && name.chars().nth(1).unwrap() <= '9' && name.chars().nth(2).unwrap() == 'M' &&
+        name.chars().nth(3).unwrap() >= '0' && name.chars().nth(3).unwrap() <= '9' {return LumpTypes::Map}
+    if name.ends_with("_START") {return LumpTypes::Marker}
+    if name.ends_with("_END") {return LumpTypes::Marker}
 
-    if wad_parsed.directory[index].size == 0 {return LumpTypes::Marker;}
+    if wad_parsed.directory[index].size == 0 {return LumpTypes::Marker}
 
     //between markers
     for i in (0..index).rev() {
-        if wad_parsed.directory[i].name.ends_with("_END") {break;}
+        if wad_parsed.directory[i].name.ends_with("_END") {break}
         if wad_parsed.directory[i].name.ends_with("_START") {
             let pre = wad_parsed.directory[i].name.trim_end_matches("START");
-            if graphic_markers.contains(&pre) {return  LumpTypes::Graphic;}
-            if flat_markers.contains(&pre) {return  LumpTypes::Flat;}
+            if graphic_markers.contains(&pre) {return LumpTypes::Graphic}
+            if flat_markers.contains(&pre) {return LumpTypes::Flat}
         }
     }
 
@@ -214,24 +192,16 @@ fn detect_lump_type(wad_parsed: &WADData, index: usize, data: &Vec<u8>) -> LumpT
         return LumpTypes::Graphic
     }
     println!("lump: {} failed to get a lumptype", name);
-    return LumpTypes::ERROR;
+    LumpTypes::ERROR
 }
 
 fn read_data_lumps(wad_data: &Vec<u8>, wad_parsed: &mut WADData) {
     for i in 0..wad_parsed.directory.len() {
         match detect_lump_type(wad_parsed, i, wad_data) {
-            LumpTypes::Graphic => {
-                read_sprites(wad_data, wad_parsed, i);
-            }
-            LumpTypes::Flat => {
-                read_flats(wad_data, wad_parsed, i);
-            }
-            LumpTypes::Map => {
-                read_levels(wad_data, wad_parsed, i);
-            }
-            _o => {
-                // println!("not implemented {:?} yet", o)
-            }
+            LumpTypes::Graphic => {read_sprites(wad_data, wad_parsed, i);}
+            LumpTypes::Flat => {read_flats(wad_data, wad_parsed, i);}
+            LumpTypes::Map => {read_levels(wad_data, wad_parsed, i);}
+            _o => {/* println!("not implemented {:?} yet", o)*/}
         }
     }
 }
@@ -251,7 +221,8 @@ pub fn parse_map(path: &str) {
         palletes: vec![],
         color_maps: vec![],
         sprites: vec![],
-        flats: vec![]
+        flats: vec![],
+        levels: vec![]
     };
 
     read_directory(&map, &mut offset, &mut wad_parsed);

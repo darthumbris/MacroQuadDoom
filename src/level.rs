@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::vector::Vector2;
 
-mod level_mesh;
+// mod level_mesh;
 mod level_elements;
 mod level_lightmap;
 mod level_portal;
@@ -14,7 +14,7 @@ mod level_poly;
 use level_portal::*;
 use level_elements::*;
 use level_lightmap::*;
-use level_mesh::LevelMesh;
+// use level_mesh::LevelMesh;
 use level_texture::*;
 use level_light::*;
 use level_actor::*;
@@ -24,6 +24,7 @@ use level_poly::*;
 //TODO split this up in multiple structs (level stats, music, lights etc)
 //TODO give everything types
 //TODO see what is needed etc
+//TODO reduce all the reference/Box etc and instead use something like keeping a vector with the indexes or somethign
 
 pub struct LevelLocals {
     //TODO level,
@@ -45,7 +46,7 @@ pub struct LevelLocals {
     canvas_tex_info: CanvasTextureInfo,
     local_event_manager: Box<EventManager>,
     aabb_tree: Box<AABBTree>,
-    level_mesh: Box<LevelMesh>,
+    // level_mesh: Box<LevelMesh>,
 
     health_groups: HashMap<i32, HealthGroup>,
 
