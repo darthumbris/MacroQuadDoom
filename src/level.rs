@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::vector::Vector2;
 
-// mod level_mesh;
+mod level_mesh;
 mod level_elements;
 mod level_lightmap;
 mod level_portal;
@@ -10,11 +10,13 @@ mod level_texture;
 mod level_light;
 mod level_bsp;
 mod level_poly;
+mod level_load;
+mod level_behavior;
 
 use level_portal::*;
 use level_elements::*;
 use level_lightmap::*;
-// use level_mesh::LevelMesh;
+use level_mesh::LevelMesh;
 use level_texture::*;
 use level_light::*;
 use level_actor::*;

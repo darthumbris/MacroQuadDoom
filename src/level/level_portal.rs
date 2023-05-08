@@ -15,6 +15,7 @@ struct PortalBlockMap {}
 
 pub struct LinePortal {}
 
+#[derive(Default, Clone, Copy)]
 pub struct SectorPortalGroup {}
 
 struct LinePortalSpan {}

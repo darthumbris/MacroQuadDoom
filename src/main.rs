@@ -57,11 +57,16 @@ fn init_world()->Player {
 #[macroquad::main(conf)]
 async fn main() {
 
-    parse_map("Assets/DOOM1.WAD");
+    let wad = parse_map("Assets/DOOM1.WAD");
 
     let wall = load_texture("Assets/greystone_128.png").await.unwrap();
 
     let mut player = init_world();
+
+    // for l in linedefs {
+        
+    // }
+    // let mesh: Mesh = Mesh { vertices: (), indices: (), texture: () };
 
     loop {
         let delta = get_frame_time();
@@ -73,7 +78,7 @@ async fn main() {
         
         movement(delta, &mut player);
 
-        render(wall, & player);
+        render(wall, & player, &wad.levels[8].vertexes, &wad.levels[8].linedefs);
 
         next_frame().await
     }

@@ -1,6 +1,6 @@
 
 mod parse_graphics;
-mod parse_level;
+pub mod parse_level;
 
 use parse_graphics::*;
 use std::array::TryFromSliceError;
@@ -92,13 +92,13 @@ pub struct WADEntry {
 
 pub struct WADData {
     directory: Vec<WADEntry>,
-    lump_map: HashMap<String, u32>,
+    lump_map: Vec<HashMap<String, u32>>,
     wad_header: WADHeader,
     palletes: Vec<Vec<WADPaletteColor>>,
     color_maps: Vec<Vec<u8>>,
     sprites: Vec<(String, WADSprite)>,
     flats: Vec<u8>,
-    levels: Vec<WADLevel>
+    pub levels: Vec<WADLevel>
 }
 
 fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
@@ -109,13 +109,19 @@ fn read_header(wad_data: &Vec<u8>, offset: &mut usize) -> WADHeader {
     WADHeader{map_type, lump_count, directory_offset}
 }
 
-fn read_directory(wad_data: &Vec<u8>, offset_: &mut usize, wad_parsed: &mut WADData) {
+fn  read_directory(wad_data: &Vec<u8>, offset_: &mut usize, wad_parsed: &mut WADData) {
+    let mut j: usize = 0;
+    wad_parsed.lump_map.push(HashMap::new());
     for i in 0 .. wad_parsed.wad_header.lump_count {
         let mut name: String = String::new();
         let offset = read_uint(wad_data, offset_).unwrap();
         let size = read_uint(wad_data, offset_).unwrap();
         copy_and_capitalize_buffer(&mut name, wad_data, offset_, 8);
-        wad_parsed.lump_map.insert(name.clone(), i);
+        if wad_parsed.lump_map[j].contains_key(&name) {
+            wad_parsed.lump_map.push(HashMap::new());
+            j +=1 ;
+        }
+        wad_parsed.lump_map[j].insert(name.clone(), i);
         wad_parsed.directory.push(WADEntry { offset, size, name });
     }
 }
@@ -207,7 +213,8 @@ fn read_data_lumps(wad_data: &Vec<u8>, wad_parsed: &mut WADData) {
 }
 
 
-pub fn parse_map(path: &str) {
+//TODO fix the hashmap for the lumps it now not properly contains all the correct lumps
+pub fn parse_map(path: &str) -> WADData {
     println!("parsing wad file");
     let map = fs::read(path).unwrap();
 
@@ -216,7 +223,7 @@ pub fn parse_map(path: &str) {
     offset = wad_header.directory_offset as usize;
     let mut wad_parsed = WADData {
         directory: vec![],
-        lump_map: HashMap::new(),
+        lump_map: vec![],
         wad_header: wad_header,
         palletes: vec![],
         color_maps: vec![],
@@ -230,4 +237,5 @@ pub fn parse_map(path: &str) {
     read_colormap(&map, &mut offset, &mut wad_parsed);
     read_data_lumps(&map, &mut wad_parsed);
     println!("\ndone parsing!");
+    wad_parsed
 }

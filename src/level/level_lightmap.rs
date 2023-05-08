@@ -62,9 +62,16 @@ struct LightMode {}
 
 pub struct ColorMap {}
 
+#[derive(Clone, Copy)]
 pub enum PalEntry {
     Argb {a: u8, r: u8, g: u8, b: u8},
     D(u32)
+}
+
+impl PalEntry {
+    pub fn new() -> PalEntry {
+        PalEntry::D(0)
+    }
 }
 
 /*TODO maybe use Rc<T> instead of Box<T>, also maybe need to use RefCell<T>

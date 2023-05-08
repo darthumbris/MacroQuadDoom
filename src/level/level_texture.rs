@@ -4,7 +4,10 @@ pub struct CanvasTextureInfo {
 
 #[derive(PartialEq, Clone, Copy)]
 pub struct TextureID {
-    tex_num: i32
+    pub tex_num: i32
 }
 
+#[derive(Clone, Copy)]
 pub struct TextureManipulation {}
+
+pub struct MissingTextureTracker {}

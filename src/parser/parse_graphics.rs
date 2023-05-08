@@ -24,8 +24,9 @@ pub struct WADSpritePost
 }
 
 pub fn read_pallete(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
-
-    let index = wad_parsed.lump_map.get("PLAYPAL").unwrap().clone() as usize;
+    println!("levels: {}", wad_parsed.levels.len());
+    let i: usize = wad_parsed.levels.len();
+    let index = wad_parsed.lump_map[i].get("PLAYPAL").unwrap().clone() as usize;
     let pallete_entry = wad_parsed.directory.get(index).unwrap();
 
     *offset = pallete_entry.offset as usize;
@@ -44,7 +45,8 @@ pub fn read_pallete(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WAD
 }
 
 pub fn read_colormap(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {
-    let index = wad_parsed.lump_map.get("COLORMAP").unwrap().clone() as usize;
+    let i: usize = wad_parsed.levels.len();
+    let index = wad_parsed.lump_map[i].get("COLORMAP").unwrap().clone() as usize;
     let color_map = wad_parsed.directory.get(index).unwrap();
 
     *offset = color_map.offset as usize;

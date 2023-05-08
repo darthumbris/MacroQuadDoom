@@ -3,7 +3,22 @@ use bitreader::BitReader;
 use crate::parser::*;
 // use crate::behavior::parse_behavior::parse_behavior;
 
-struct WADLevelBlockmap {
+#[repr(u16)]
+enum Lumps {
+    THINGS = 1,
+    LINEDEFS = 2,
+    SIDEDEFS = 3,
+    VERTEXES = 4,
+    SEGS= 5,
+    SSECTORS = 6,
+    NODES = 7,
+    SECTORS = 8,
+    REJECT = 9,
+    BLOCKMAP = 10,
+    BEHAVIOR = 11
+}
+
+pub struct WADLevelBlockmap {
     x: u16,
     y: u16,
     num_cols: u16,
@@ -11,7 +26,7 @@ struct WADLevelBlockmap {
     blocklists: Vec<Vec<u16>>
 }
 
-struct WADLevelSector {
+pub struct WADLevelSector {
     floor_height: i16,
     ceiling_height: i16,
     floor_texture: String,
@@ -21,12 +36,12 @@ struct WADLevelSector {
     tag: i16
 }
 
-struct WADLevelSubSector {
+pub struct WADLevelSubSector {
     num_segs: i16,
     start_seg: i16
 }
 
-struct WADLevelSeg {
+pub struct WADLevelSeg {
     start: u16,
     end: u16,
     angle: i16,
@@ -35,12 +50,13 @@ struct WADLevelSeg {
     offset: i16
 }
 
-struct WADLevelVertex {
-    x: i16,
-    y: i16
+#[derive(Clone, Copy)]
+pub struct WADLevelVertex {
+    pub x: i16,
+    pub y: i16
 }
 
-struct WADLevelSidedef {
+pub struct WADLevelSidedef {
     x_offset: i16,
     y_offset: i16,
     sector: u16,
@@ -63,10 +79,10 @@ struct WADLevelDoomLinedef {
     tag: u16,
 }
 
-struct WADLevelLinedef
+pub struct WADLevelLinedef
 {
-  from: u16,
-  to: u16,
+  pub from: u16,
+  pub to: u16,
   flags: u16,
   doom: Option<WADLevelDoomLinedef>,
   hex: Option<WADLevelHexenLinedef>,
@@ -85,7 +101,7 @@ struct WADLevelHexenThing {
     arg5: u8
 }
 
-struct WADLevelThing
+pub struct WADLevelThing
 {
   x: i16,
   y: i16,
@@ -95,7 +111,7 @@ struct WADLevelThing
   hex: Option<WADLevelHexenThing>
 }
 
-struct WADLevelNode {
+pub struct WADLevelNode {
     x_start: i16,
     y_start: i16,
     dx: i16,
@@ -114,33 +130,32 @@ struct WADLevelNode {
 
 //TODO this should be in a udmf format 
 pub struct WADLevel {
-    name: String,
-    things: Vec<WADLevelThing>,
-    linedefs: Vec<WADLevelLinedef>,
-    sidedefs: Vec<WADLevelSidedef>,
-    vertexes: Vec<WADLevelVertex>,
-    segs: Vec<WADLevelSeg>,
-    ssectors: Vec<WADLevelSubSector>,
-    nodes: Vec<WADLevelNode>, //udmf stores the nodes in znodes
-    sectors: Vec<WADLevelSector>,
+    pub name: String,
+    pub things: Vec<WADLevelThing>,
+    pub linedefs: Vec<WADLevelLinedef>,
+    pub sidedefs: Vec<WADLevelSidedef>,
+    pub vertexes: Vec<WADLevelVertex>,
+    pub segs: Vec<WADLevelSeg>,
+    pub ssectors: Vec<WADLevelSubSector>,
+    pub nodes: Vec<WADLevelNode>, //udmf stores the nodes in znodes
+    pub sectors: Vec<WADLevelSector>,
     // blockmap: WADLevelBlockmap,
-    reject: Vec<Vec<bool>>,
-    format: Format
+    pub reject: Vec<Vec<bool>>,
+    pub format: Format
     // behavior, (HEXEN and udmf only)
     // znodes (udmf only)
 }
 
 #[derive(Debug, PartialEq)]
-enum Format {
+pub enum Format {
     UDMF,
     DOOM,
     HEXEN
 }
 
-pub fn get_map_lump(lump_name: String, wad_parsed: &WADData, wad_data: &Vec<u8>) -> Vec<u8> {
-    let index = wad_parsed.lump_map.get(&lump_name).unwrap().to_owned() as usize;
+pub fn get_lump_from_dir(index: usize, wad_parsed: &WADData, wad_data: &Vec<u8>) -> Vec<u8> {
     let wad_entry = &wad_parsed.directory[index];
-    return wad_data[wad_entry.offset as usize..(wad_entry.offset as usize + wad_entry.size as usize)].to_vec();
+    wad_data[wad_entry.offset as usize..(wad_entry.offset as usize + wad_entry.size as usize)].to_vec()
 }
 
 fn parse_hexen_things(lump: &Vec<u8>) -> Vec<WADLevelThing> {
@@ -522,30 +537,31 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         else {format = Format::DOOM;}
     }
 
-    println!("index of blockmap: {}, len: {}, name: {}", wad_parsed.lump_map.get("BLOCKMAP").unwrap(), wad_parsed.lump_map.len(), wad_parsed.directory[104].name);
+    // println!("index of blockmap: {}, len: {}, name: {}", wad_parsed.lump_map.get("BLOCKMAP").unwrap(), wad_parsed.lump_map.len(), wad_parsed.directory[104].name);
 
     let name = wad_parsed.directory[index].name.to_string();
     if format == Format::DOOM || format == Format::HEXEN {
         let things;
         let linedefs;
-        let sidedefs = parse_sidedefs(&get_map_lump("SIDEDEFS".to_owned(), wad_parsed, wad_data));
-        let vertexes = parse_vertexes(&get_map_lump("VERTEXES".to_owned(), wad_parsed, wad_data));
-        let segs = parse_segs(&get_map_lump("SEGS".to_owned(), wad_parsed, wad_data));
-        let ssectors = parse_subsectors(&get_map_lump("SSECTORS".to_owned(), wad_parsed, wad_data));
-        let nodes = parse_nodes(&get_map_lump("NODES".to_owned(), wad_parsed, wad_data));
-        let sectors = parse_sectors(&get_map_lump("SECTORS".to_owned(), wad_parsed, wad_data));
-        // let blockmap = parse_blockmap(&get_map_lump("BLOCKMAP".to_owned(), wad_parsed, wad_data));
-        let reject = parse_rejects(&get_map_lump("REJECT".to_owned(), wad_parsed, wad_data), sectors.len());
+        let sidedefs = parse_sidedefs(&get_lump_from_dir(index + Lumps::SIDEDEFS as usize, wad_parsed, wad_data));
+        let vertexes = parse_vertexes(&get_lump_from_dir(index + Lumps::VERTEXES as usize, wad_parsed, wad_data));
+        let segs = parse_segs(&get_lump_from_dir(index + Lumps::SEGS as usize, wad_parsed, wad_data));
+        let ssectors = parse_subsectors(&get_lump_from_dir(index + Lumps::SSECTORS as usize, wad_parsed, wad_data));
+        let nodes = parse_nodes(&get_lump_from_dir(index + Lumps::NODES as usize, wad_parsed, wad_data));
+        let sectors = parse_sectors(&get_lump_from_dir(index + Lumps::SECTORS as usize, wad_parsed, wad_data));
+        let reject = parse_rejects(&get_lump_from_dir(index + Lumps::REJECT as usize, wad_parsed, wad_data), sectors.len());
+        // let blockmap = parse_blockmap(&get_lump_from_dir(index + Lumps::BLOCKMAP as usize, wad_parsed, wad_data));
         if format == Format::DOOM {
-            things = parse_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
-            linedefs = parse_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+            things = parse_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
+            linedefs = parse_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
             wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
         }
         else if format == Format::HEXEN {
-            things = parse_hexen_things(&get_map_lump("THINGS".to_owned(), wad_parsed, wad_data));
-            linedefs = parse_hexen_linedefs(&get_map_lump("LINEDEFS".to_owned(), wad_parsed, wad_data));
+            things = parse_hexen_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
+            linedefs = parse_hexen_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
             wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
         }
     }
+    
     //TODO check for udmf
 }

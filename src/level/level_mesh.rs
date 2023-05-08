@@ -1,7 +1,7 @@
 use crate::vector::{Vector3, Vector2};
 
 use super::LevelLocals;
-use super::level_elements::{Sector, Side, SubSector, SectorE};
+use super::level_elements::{Sector, Side, SubSector, SectorE, SectorIndex};
 use super::level_lightmap::SurfaceType;
 use super::level_texture::TextureID;
 
@@ -17,10 +17,10 @@ pub struct LevelMesh {
 struct Surface {
     type_: SurfaceType,
     type_index: i32,
-    vert_count: i32,
+    vert_count: u32,
     start_vert_index: u32,
     plane: SectorPlane,
-    control_sector: Option<Box<Sector>>,
+    control_sector: SectorIndex,
     b_sky: bool
 }
 
@@ -32,6 +32,7 @@ struct Sides {
     back: Option<SidesBack>
 }
 
+#[derive(Clone, Copy)]
 struct SidesBack {
     v1_top_back: f64,
     v1_bottom_back: f64,
@@ -39,6 +40,7 @@ struct SidesBack {
     v2_bottom_back: f64,
 }
 
+#[derive(Clone, Copy)]
 pub struct SectorPlane {
     normal: Vector3<f64>,
     d: f64,
@@ -57,6 +59,10 @@ impl SectorPlane {
         self.normal = Vector3::<f64>{x: -self.normal.x, y: -self.normal.y, z: -self.normal.z};
         self.d = -self.d;
         self.neg_ic = -self.neg_ic;
+    }
+
+    pub fn new() -> SectorPlane {
+        SectorPlane { normal: Vector3::<f64>::new(), d: 0., neg_ic: 0.}
     }
 }
 
@@ -87,20 +93,22 @@ impl LevelMesh {
 
             let sector = sub.sector;
 
-            if sector.is_none() || Self::is_control_sector(&sector.unwrap()) {continue;} 
-            let sec = sector.unwrap();
+            if sector == -1 || Self::is_control_sector(sector) {continue;} 
+            let sec = sector;
 
-            Self::create_floor_surfaces(&self, doom_map, sub, &sec, i as i32, false);
-            Self::create_ceiling_surfaces(&self, doom_map, sub, &sec, i as i32, false);
-
-            for j in 0..sec.e.x_floor.f_floors.len() {
-                Self::create_floor_surfaces(&self, doom_map, sub, &sec.e.x_floor.f_floors[j].model, i as i32, true);
-                Self::create_ceiling_surfaces(&self, doom_map, sub, &sec.e.x_floor.f_floors[j].model, i as i32, true);
+            Self::create_floor_surfaces(self, doom_map, sub, sec, i as i32, false);
+            Self::create_ceiling_surfaces(self, doom_map, sub, sec, i as i32, false);
+            let cur_sec = &doom_map.elements.sectors[sec as usize];
+            let ext_sec = &doom_map.elements.extsectors[cur_sec.e as usize];
+            for j in 0..ext_sec.x_floor.f_floors.len() {
+                Self::create_floor_surfaces(self, doom_map, sub, ext_sec.x_floor.f_floors[j].model, i as i32, true);
+                Self::create_ceiling_surfaces(self, doom_map, sub, ext_sec.x_floor.f_floors[j].model, i as i32, true);
             }
         }
     }
 
-    fn create_ceiling_surfaces(&self, doom_map: &LevelLocals, sub: &SubSector, sector: &Sector, type_index: i32, is_3d_floor: bool) {
+    fn create_ceiling_surfaces(&mut self, doom_map: &LevelLocals, sub: &SubSector, sec_index: SectorIndex, type_index: i32, is_3d_floor: bool) {
+        let sector = &doom_map.elements.sectors[sec_index as usize];
         let b_sky = Self::is_sky_sector(sector);
         let mut plane: SectorPlane;
 
@@ -115,8 +123,9 @@ impl LevelMesh {
         let vert_count = sub.line_count;
         let start_vert_index = self.vertices.len() as u32;
 
-        self.vertices.resize_with((vert_count + start_vert_index) as usize, Default::default());
-        let mut verts = &self.vertices;
+        // self.vertices.resize_with((vert_count + start_vert_index) as usize, Default::default());
+        self.vertices.resize((vert_count + start_vert_index) as usize, Vector3::<f32>::new());
+        let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
             let seg = &sub.first_line[i];
@@ -124,15 +133,16 @@ impl LevelMesh {
 
             verts[i + start_vert_index as usize].x = v1.x;
             verts[i + start_vert_index as usize].y = v1.y;
-            verts[i + start_vert_index as usize].z = plane.z_at_point(&verts[i + start_vert_index as usize]) as f32;
+            verts[i + start_vert_index as usize].z = plane.z_at_point(&verts[i + start_vert_index as usize].xy()) as f32;
         }
         let type_ = SurfaceType::STCeiling;
-        let control_sector = if is_3d_floor {Some(sector)} else {None};
+        let control_sector = if is_3d_floor {sec_index} else {-1};
 
         self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky });
     }
 
-    fn create_floor_surfaces(&self, doom_map: &LevelLocals, sub: &SubSector, sector: &Sector, type_index: i32, is_3d_floor: bool) {
+    fn create_floor_surfaces(&mut self, doom_map: &LevelLocals, sub: &SubSector, sec_index: SectorIndex, type_index: i32, is_3d_floor: bool) {
+        let sector = &doom_map.elements.sectors[sec_index as usize];
         let b_sky = Self::is_sky_sector(sector);
         let mut plane: SectorPlane;
 
@@ -147,8 +157,8 @@ impl LevelMesh {
         let vert_count = sub.line_count;
         let start_vert_index = self.vertices.len() as u32;
 
-        self.vertices.resize_with((vert_count + start_vert_index) as usize, Default::default());
-        let verts = &self.vertices;
+        self.vertices.resize((vert_count + start_vert_index) as usize, Vector3::<f32>::new());
+        let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
             let seg = &sub.first_line[vert_count as usize - 1 - i];
@@ -156,30 +166,32 @@ impl LevelMesh {
 
             verts[i + start_vert_index as usize].x = v1.x;
             verts[i + start_vert_index as usize].y = v1.y;
-            verts[i + start_vert_index as usize].z = plane.z_at_point(verts[i + start_vert_index as usize]);
+            verts[i + start_vert_index as usize].z = plane.z_at_point(&verts[i + start_vert_index as usize].xy()) as f32;
         }
 
         let type_ = SurfaceType::STFloor;
-        let control_sector = if is_3d_floor {Some(sector)} else {None};
+        let control_sector = if is_3d_floor {sec_index} else {-1};
 
         self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky });
     }
 
     fn create_side_surfaces(&mut self, doom_map: &LevelLocals, side: &Side) {
-        let front = side.sector;
-        let back = if side.linedef.front_sector.unwrap() == front {side.linedef.back_sector.unwrap()} else {side.linedef.front_sector.unwrap()};
+        let front_index = side.sector;
+        let back_index = if side.linedef.front_sector == front_index {side.linedef.back_sector} else {side.linedef.front_sector};
 
-        if Self::is_control_sector(front.as_ref()) {
+        if Self::is_control_sector(front_index) {
             return
         }
 
         let v1 = Self::to_f32_vector2(&side.v1().f_pos());
         let v2 = Self::to_f32_vector2(&side.v2().f_pos());
 
-        let mut v1_top = front.ceilingplane.z_at_point(&v1);
-        let mut v1_bottom = front.floorplane.z_at_point(&v1);
-        let mut v2_top = front.ceilingplane.z_at_point(&v2);
-        let mut v2_bottom = front.floorplane.z_at_point(&v2);
+        let front_sector = &doom_map.elements.sectors[front_index as usize];
+
+        let v1_top = front_sector.ceilingplane.z_at_point(&v1);
+        let v1_bottom = front_sector.floorplane.z_at_point(&v1);
+        let v2_top = front_sector.ceilingplane.z_at_point(&v2);
+        let v2_bottom = front_sector.floorplane.z_at_point(&v2);
 
         let mut sides: Sides = Sides { v1_bottom, v2_bottom, v1_top, v2_top, back: None};
 
@@ -188,14 +200,14 @@ impl LevelMesh {
         let dx = Vector2::<f32> {x: v2.x, y: v2.y};
         let dist = dx.length();
 
-        if back.is_some() {
-            let back_sec = back.unwrap();
-            Self::create_side_surfaces_back_sector(&self, back_sec, front, &v1, &v2, type_index);
+        if back_index >= 0 {
+            let back_sec = &doom_map.elements.sectors[back_index as usize];
+            Self::create_side_surfaces_back_sector(self, doom_map, back_sec, front_sector, &v1, &v2, type_index);
 
-            let mut v1_top_back = back_sec.ceilingplane.z_at_point(&v1);
-            let mut v1_bottom_back = back_sec.floorplane.z_at_point(&v1);
-            let mut v2_top_back = back_sec.ceilingplane.z_at_point(&v2);
-            let mut v2_bottom_back = back_sec.floorplane.z_at_point(&v2);
+            let v1_top_back = back_sec.ceilingplane.z_at_point(&v1);
+            let v1_bottom_back = back_sec.floorplane.z_at_point(&v1);
+            let v2_top_back = back_sec.ceilingplane.z_at_point(&v2);
+            let v2_bottom_back = back_sec.floorplane.z_at_point(&v2);
 
             sides.back = Some(SidesBack {v1_bottom_back, v1_top_back, v2_bottom_back, v2_top_back});
 
@@ -203,25 +215,27 @@ impl LevelMesh {
                 return
             }
             if v1_bottom < v1_bottom_back || v2_bottom < v2_bottom_back {
-                Self::create_side_surfaces_bottom_seg(&self, side, &v1, &v2, type_index, &mut sides);
+                Self::create_side_surfaces_bottom_seg(self, side, &v1, &v2, type_index, &mut sides);
             }
             if v1_top > v1_top_back || v2_top > v2_top_back {
-                let b_sky = Self::is_top_side_sky(&front, &back_sec, side);
-                Self::create_side_surfaces_top_seg(&self, side, &v1, &v2, type_index, &mut sides, b_sky);
+                let b_sky = Self::is_top_side_sky(front_sector, back_sec, side);
+                Self::create_side_surfaces_top_seg(self, side, &v1, &v2, type_index, &mut sides, b_sky);
             }
         }
-        if back.is_none() {
-            Self::create_side_surfaces_middle_seg(&self, &v1, &v2, type_index, &sides);
+        if back_index == -1 {
+            Self::create_side_surfaces_middle_seg(self, &v1, &v2, type_index, &sides);
         }
     }
 
-    fn create_side_surfaces_back_sector(&self, back: Box<Sector>, front: Box<Sector>, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32) {
-        for i in 0..front.e.x_floor.f_floors.len() {
-            let x_floor = front.e.x_floor.f_floors[i];
+    fn create_side_surfaces_back_sector(&mut self, doom_map: &LevelLocals, back: &Sector, front: &Sector, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32) {
+        let ext_sec = &doom_map.elements.extsectors[front.e as usize];
+        for i in 0..ext_sec.x_floor.f_floors.len() {
+            let x_floor = ext_sec.x_floor.f_floors[i];
 
             let mut both_sides = false;
-            for j in 0..back.e.x_floor.f_floors.len() {
-                if back.e.x_floor.f_floors[j] == x_floor {
+            let ext_sec_back = &doom_map.elements.extsectors[back.e as usize];
+            for j in 0..ext_sec_back.x_floor.f_floors.len() {
+                if ext_sec_back.x_floor.f_floors[j] == x_floor {
                     both_sides = true;
                     break;
                 }
@@ -231,9 +245,9 @@ impl LevelMesh {
             }
 
             let type_ = SurfaceType::STMiddleWall;
-            let control_sector = Some(x_floor.model);
+            let control_sector = x_floor.model;
 
-            let mut verts: [Vector3<f32>;4];
+            let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new();4];
             verts[0].x = v2.x;
             verts[2].x = v2.x;
             verts[0].y = v2.y;
@@ -242,10 +256,11 @@ impl LevelMesh {
             verts[3].x = v1.x;
             verts[1].y = v1.y;
             verts[3].y = v1.y;
-            verts[0].z = x_floor.model.floorplane.z_at_point(v2) as f32;
-            verts[1].z = x_floor.model.floorplane.z_at_point(v1) as f32;
-            verts[2].z = x_floor.model.ceilingplane.z_at_point(v2) as f32;
-            verts[3].z = x_floor.model.ceilingplane.z_at_point(v1) as f32;
+            let model = &doom_map.elements.sectors[x_floor.model as usize];
+            verts[0].z = model.floorplane.z_at_point(v2) as f32;
+            verts[1].z = model.floorplane.z_at_point(v1) as f32;
+            verts[2].z = model.ceilingplane.z_at_point(v2) as f32;
+            verts[3].z = model.ceilingplane.z_at_point(v1) as f32;
 
             let start_vert_index = self.vertices.len() as u32;
             let vert_count = 4;
@@ -259,10 +274,10 @@ impl LevelMesh {
         }
     }
 
-    fn create_side_surfaces_middle_seg(&self, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &Sides) {
+    fn create_side_surfaces_middle_seg(&mut self, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &Sides) {
         
 
-        let mut verts: [Vector3<f32>;4];
+        let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
         verts[0].x = v1.x;
         verts[2].x = v1.x;
 		verts[0].y = v1.y;
@@ -285,14 +300,14 @@ impl LevelMesh {
 
         let plane = Self::to_plane(&verts[0], &verts[1], &verts[2]);
         let type_ = SurfaceType::STMiddleWall;
-        let control_sector = None;
+        let control_sector = -1;
 
         self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false });
 
     }
-    fn create_side_surfaces_top_seg(&self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides, b_sky: bool) {
+    fn create_side_surfaces_top_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides, b_sky: bool) {
         if b_sky || Self::is_top_side_visible(side) {
-            let mut verts: [Vector3<f32>;4];
+            let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
             verts[0].x = v1.x;
             verts[2].x = v1.x;
             verts[0].y = v1.y;
@@ -315,7 +330,7 @@ impl LevelMesh {
 
             let plane = Self::to_plane(&verts[0], &verts[1], &verts[2]);
             let type_ = SurfaceType::STUpperWall;
-            let control_sector = None;
+            let control_sector = -1;
 
             self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky })
         }
@@ -323,9 +338,9 @@ impl LevelMesh {
         sides.v1_top = sides.back.unwrap().v1_top_back;
         sides.v2_top = sides.back.unwrap().v2_top_back;
     }
-    fn create_side_surfaces_bottom_seg(&self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides) {
+    fn create_side_surfaces_bottom_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides) {
         if Self::is_bottom_side_visible(side) {
-            let mut verts: [Vector3<f32>;4];
+            let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
             verts[0].x = v1.x;
             verts[2].x = v1.x;
             verts[0].y = v1.y;
@@ -348,7 +363,7 @@ impl LevelMesh {
 
             let plane = Self::to_plane(&verts[0], &verts[1], &verts[2]);
             let type_ = SurfaceType::STLowerWall;
-            let control_sector = None;
+            let control_sector = -1;
 
             self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false })
         }
@@ -360,13 +375,13 @@ impl LevelMesh {
     fn create_uvs(&mut self) {
 
         for i in 0..self.surfaces.len() {
-            let s = self.surfaces[i];
+            let s = &self.surfaces[i];
             let vert_count = s.vert_count;
             let pos = s.start_vert_index;
             let verts = &self.vertices;
 
             for j in 0..vert_count {
-                self.uv_index.push(j);
+                self.uv_index.push(j as i32);
             }
 
             if s.type_ == SurfaceType::STFloor || s.type_ == SurfaceType::STCeiling {
@@ -420,18 +435,23 @@ impl LevelMesh {
         sector.get_texture(SectorE::Ceiling as usize) == temp_sky_num
     }
     
-    fn is_control_sector(sector: &Sector) -> bool {false}
+    fn is_control_sector(sector: SectorIndex) -> bool {false}
 
     
     fn to_plane(p0: &Vector3<f32>, p1: &Vector3<f32>, p2: &Vector3<f32>) -> SectorPlane {
         // let n: Vector3<f32> = ((p1 - p0) ^ (p2 - p1)) //
         // ^ is for cross product, | is for dot product
         //TODO
+        SectorPlane::new()
     }
 
-    fn to_f32_vector2(v: &Vector2<f64>) -> Vector2<f32> {/*TODO */}
+    fn to_f32_vector2(v: &Vector2<f64>) -> Vector2<f32> {/*TODO */
+        Vector2::<f32>::new()
+    }
     
-    fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {/*TODO */}
+    fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {/*TODO */
+        Vector3::<f32>::new()
+    }
     
     fn to_f32_vector4() {/*TODO */}
 
