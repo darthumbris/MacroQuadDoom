@@ -8,13 +8,18 @@ use super::level_texture::{TextureID, TextureManipulation};
 
 pub type SectorIndex = i32; //if -1 -> does not exist (NULL)
 pub type ExtSectorIndex = i32; //if -1 -> does not exist (NULL)
+pub type LineIndex = i32; //if -1 -> does not exist (NULL)
+pub type SubSectorIndex = i32; //if -1 -> does not exist (NULL)
+pub type LineDefIndex = i32; //if -1 -> does not exist (NULL)
+pub type SegIndex = i32; //if -1 -> does not exist (NULL)
+pub type SideDefIndex = i32; //if -1 -> does not exist (NULL)
 
 pub struct SubSector {
     pub sector: SectorIndex,
     polys: Box<PolyNode>,
     bsp: Box<MiniBSP>,
-    pub first_line: Vec<Box<Seg>>,
-    render_sector: Box<Sector>,
+    pub first_line: Vec<SegIndex>,
+    render_sector: SectorIndex,
     section: Box<Section>,
     subsector_num: i32,
     pub line_count: u32,
@@ -45,7 +50,7 @@ pub struct Line {
     special: i32,
     args: [i32;5],
     alpha: f64,
-    sidedef: [Option<Box<Side>>;2],
+    sidedef: [SideDefIndex;2],
     bbox: [f64;4],
     pub front_sector: SectorIndex,
     pub back_sector: SectorIndex,
@@ -75,7 +80,7 @@ pub struct Side {
     udmf_index: i32,
     light_head: Box<LightNode>,
     lightmap: Box<LightMapSurface>,
-    segs: Vec<Box<Seg>>, //all segs in ascending order
+    segs: Vec<SegIndex>, //all segs in ascending order
     num_segs: i32,
     side_num: i32,
 
@@ -84,7 +89,7 @@ pub struct Side {
 
 impl Side {
     pub fn v1(&self) -> &Vertex {
-        if self.linedef.sidedef[0].is_some() {
+        if self.linedef.sidedef[0] >= 0 {
             return &self.linedef.v1
         }
         else {
@@ -93,7 +98,7 @@ impl Side {
     }
 
     pub fn v2(&self) -> &Vertex {
-        if self.linedef.sidedef[0].is_some() {
+        if self.linedef.sidedef[0] >= 0 {
             return &self.linedef.v2
         }
         else {
@@ -115,7 +120,7 @@ pub struct Vertex {
     dirty: bool,
     num_heights: i32,
     num_sectors: i32,
-    sectors: Vec<Box<Sector>>,
+    sectors: Vec<SectorIndex>,
     height_list: Vec<f32>,
 
     //TODO functions and constructors etc
@@ -140,8 +145,8 @@ pub struct Sector {
     pub floorplane: SectorPlane,
     pub ceilingplane: SectorPlane,
     center_spot: Vector2<f64>,
-    lines: Vec<Box<Line>>,
-    height_sec: Option<Box<Sector>>,
+    lines: Vec<LineIndex>,
+    height_sec: SectorIndex,
 
     sector_portal_thinglist: SecNode,
     touching_render_things: SecNode,
@@ -173,7 +178,7 @@ pub struct Sector {
     subsector_count: i32,
     reflect: [f32;2],
     trans_door_height: f64,
-    subsectors: Vec<SubSector>, //TODO maybe smart pointers
+    subsectors: Vec<SubSectorIndex>, //TODO maybe smart pointers
     portals_fc: [SectorPortalGroup;2],
 
     vbo_index: [i32;4],
@@ -233,7 +238,7 @@ impl Sector {
     }
 
     pub fn new(e: ExtSectorIndex) -> Sector {
-        Sector {e, floorplane: SectorPlane::new(), ceilingplane: SectorPlane::new(), splane: [Splane::new();2], level: None, center_spot: Vector2::<f64>::new(), lines: vec![], height_sec: None, sector_portal_thinglist: SecNode::default(), touching_render_things: SecNode::default(), special_colors: [PalEntry::new(); 5], additive_colors: [PalEntry::new(); 5], color_map: ColorMap {}, special: 0, sky: 0, valid_count: 0, bottom_map: 0, mid_map: 0, top_map: 0, trans_door: false, light_level: 0, more_flags: 0, flags: 0, portals: [0;2], portal_group: 0, sector_num: 0, subsector_count: 0, reflect: [0.;2], trans_door_height: 0., subsectors: vec![], portals_fc: [SectorPortalGroup::default(); 2], vbo_index: [0;4], ibo_index: [0;4], vbo_height: [[0.;2];2], vbo_count: [0;2], ibo_count: 0, has_light_map: false, thing_list: vec![], gravity: 0., touching_thing_list: vec![], friction: 0., move_factor: 0., terrain_num: [0;2], sec_name: String::new(), sec_type: 0, sound_traversed: 0, stair_lock: 0, prev_sec: 0, next_sec: 0, damage_type: String::new(), damage_amount: 0, damage_interval: 0, leaky_damage: 0, zone_number: 0, health_floor: 0, health_ceiling: 0, health_3d: 0, health_floor_group: 0, health_ceiling_group: 0, health_3d_group: 0 }
+        Sector {e, floorplane: SectorPlane::new(), ceilingplane: SectorPlane::new(), splane: [Splane::new();2], level: None, center_spot: Vector2::<f64>::new(), lines: vec![], height_sec: -1, sector_portal_thinglist: SecNode::default(), touching_render_things: SecNode::default(), special_colors: [PalEntry::new(); 5], additive_colors: [PalEntry::new(); 5], color_map: ColorMap {}, special: 0, sky: 0, valid_count: 0, bottom_map: 0, mid_map: 0, top_map: 0, trans_door: false, light_level: 0, more_flags: 0, flags: 0, portals: [0;2], portal_group: 0, sector_num: 0, subsector_count: 0, reflect: [0.;2], trans_door_height: 0., subsectors: vec![], portals_fc: [SectorPortalGroup::default(); 2], vbo_index: [0;4], ibo_index: [0;4], vbo_height: [[0.;2];2], vbo_count: [0;2], ibo_count: 0, has_light_map: false, thing_list: vec![], gravity: 0., touching_thing_list: vec![], friction: 0., move_factor: 0., terrain_num: [0;2], sec_name: String::new(), sec_type: 0, sound_traversed: 0, stair_lock: 0, prev_sec: 0, next_sec: 0, damage_type: String::new(), damage_amount: 0, damage_interval: 0, leaky_damage: 0, zone_number: 0, health_floor: 0, health_ceiling: 0, health_3d: 0, health_floor_group: 0, health_ceiling_group: 0, health_3d_group: 0 }
     }
 }
 
@@ -338,17 +343,17 @@ struct LinkedSector {
 }
 
 pub struct LevelElements {
-    vertexes: Vec<Vertex>,
+    pub vertexes: Vec<Vertex>,
     pub sectors: Vec<Sector>,
     pub extsectors: Vec<ExtSector>,
     line_buffer: Vec<Box<Line>>,
     subsector_buffer: Vec<Box<SubSector>>,
-    lines: Vec<Line>,
+    pub lines: Vec<Line>,
     pub sides: Vec<Side>,
     seg_buffer: Vec<Box<Seg>>,
-    segs: Vec<Seg>,
+    pub segs: Vec<Seg>,
     pub subsectors: Vec<SubSector>,
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     game_subsectors: Vec<SubSector>,
     game_nodes: Vec<Node>,
     head_game_node: Box<Node>,
@@ -361,7 +366,7 @@ pub struct LevelElements {
 
 struct Zone {}
 
-struct Node {}
+pub struct Node {}
 
 #[derive(Clone, Copy)]
 pub struct Splane {

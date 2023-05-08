@@ -128,7 +128,7 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &sub.first_line[i];
+            let seg = &doom_map.elements.segs[sub.first_line[i] as usize];
             let v1 = Self::to_f32_vector2(&seg.v1.f_pos());
 
             verts[i + start_vert_index as usize].x = v1.x;
@@ -161,7 +161,7 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &sub.first_line[vert_count as usize - 1 - i];
+            let seg = &doom_map.elements.segs[sub.first_line[vert_count as usize - 1 - i] as usize];
             let v1 = Self::to_f32_vector2(&seg.v1.f_pos());
 
             verts[i + start_vert_index as usize].x = v1.x;
