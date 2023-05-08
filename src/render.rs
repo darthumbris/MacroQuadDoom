@@ -22,7 +22,7 @@ pub fn render(wall: Texture2D, player: &Player, verts: &Vec<WADLevelVertex>, lin
         let v2 = verts[l.to as usize];
         // draw_line(v1.x as f32 / 65536., v1.y as f32 / 65536., v2.x as f32 / 65536., v2.y as f32 / 65536., 1., GREEN);
         // println!("Drawing line from: {},{} to: {},{}", v1.x as f32 / 65536., v1.y as f32 / 65536., v2.x as f32 / 65536., v2.y as f32 / 65536.);
-        draw_line(v1.x as f32 / 2048., v1.y as f32 / 2048., v2.x as f32 / 2048., v2.y as f32 / 2048., 0.01, GREEN);
+        draw_line(v1.x as f32 / 128., v1.y as f32 / 128., v2.x as f32 / 128., v2.y as f32 / 128., 0.01, GREEN);
         // println!("Drawing line from: {},{} to: {},{}", v1.x, v1.y, v2.x, v2.y);
         // let vec1: Vec3 = Vec3 { x: v1.x as f32 / 2048., y: 0., z: v1.y as f32 / 2048. };
         // let vec2: Vec3 = Vec3 { x: v2.x as f32 / 2048., y: 0., z: v2.y as f32 / 2048. };
