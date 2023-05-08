@@ -63,11 +63,6 @@ async fn main() {
 
     let mut player = init_world();
 
-    // for l in linedefs {
-        
-    // }
-    // let mesh: Mesh = Mesh { vertices: (), indices: (), texture: () };
-
     loop {
         let delta = get_frame_time();
         clear_background(LIGHTGRAY);
