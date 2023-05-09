@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::vector::{Vector3, Vector2};
 
 use super::LevelLocals;
@@ -51,18 +53,30 @@ pub struct SectorPlane {
 }
 
 impl SectorPlane {
+    pub fn new() -> SectorPlane {
+        SectorPlane { normal: Vector3::<f64>::new(), d: 0., neg_ic: 0.}
+    }
+    
     pub fn z_at_point(&self, point: &Vector2<f32>) -> f64{
         (self.d + self.normal.x * f64::from(point.x) + self.normal.y * f64::from(point.y)) * self.neg_ic
     }
-
+    
     pub fn flip_verts(&mut self) {
         self.normal = Vector3::<f64>{x: -self.normal.x, y: -self.normal.y, z: -self.normal.z};
         self.d = -self.d;
         self.neg_ic = -self.neg_ic;
     }
 
-    pub fn new() -> SectorPlane {
-        SectorPlane { normal: Vector3::<f64>::new(), d: 0., neg_ic: 0.}
+    pub fn is_slope(&self) -> bool {
+        !self.normal.xy().is_zero()
+    }
+
+    pub fn set(&mut self, aa: f64, bb: f64, cc: f64, dd: f64) {
+        self.normal.x = aa;
+        self.normal.y = bb;
+        self.normal.z = cc;
+        self.d = dd;
+        self.neg_ic = -1. / cc;
     }
 }
 
@@ -98,7 +112,7 @@ impl LevelMesh {
 
             Self::create_floor_surfaces(self, doom_map, sub, sec, i as i32, false);
             Self::create_ceiling_surfaces(self, doom_map, sub, sec, i as i32, false);
-            let cur_sec = &doom_map.elements.sectors[sec as usize];
+            let cur_sec = &doom_map.elements.sectors.borrow()[sec as usize];
             let ext_sec = &doom_map.elements.extsectors[cur_sec.e as usize];
             for j in 0..ext_sec.x_floor.f_floors.len() {
                 Self::create_floor_surfaces(self, doom_map, sub, ext_sec.x_floor.f_floors[j].model, i as i32, true);
@@ -108,7 +122,7 @@ impl LevelMesh {
     }
 
     fn create_ceiling_surfaces(&mut self, doom_map: &LevelLocals, sub: &SubSector, sec_index: SectorIndex, type_index: i32, is_3d_floor: bool) {
-        let sector = &doom_map.elements.sectors[sec_index as usize];
+        let sector = &doom_map.elements.sectors.borrow()[sec_index as usize];
         let b_sky = Self::is_sky_sector(sector);
         let mut plane: SectorPlane;
 
@@ -142,7 +156,7 @@ impl LevelMesh {
     }
 
     fn create_floor_surfaces(&mut self, doom_map: &LevelLocals, sub: &SubSector, sec_index: SectorIndex, type_index: i32, is_3d_floor: bool) {
-        let sector = &doom_map.elements.sectors[sec_index as usize];
+        let sector = &doom_map.elements.sectors.borrow()[sec_index as usize];
         let b_sky = Self::is_sky_sector(sector);
         let mut plane: SectorPlane;
 
@@ -186,7 +200,7 @@ impl LevelMesh {
         let v1 = Self::to_f32_vector2(&side.v1().f_pos());
         let v2 = Self::to_f32_vector2(&side.v2().f_pos());
 
-        let front_sector = &doom_map.elements.sectors[front_index as usize];
+        let front_sector = &doom_map.elements.sectors.borrow()[front_index as usize];
 
         let v1_top = front_sector.ceilingplane.z_at_point(&v1);
         let v1_bottom = front_sector.floorplane.z_at_point(&v1);
@@ -201,7 +215,7 @@ impl LevelMesh {
         let dist = dx.length();
 
         if back_index >= 0 {
-            let back_sec = &doom_map.elements.sectors[back_index as usize];
+            let back_sec = &doom_map.elements.sectors.borrow()[back_index as usize];
             Self::create_side_surfaces_back_sector(self, doom_map, back_sec, front_sector, &v1, &v2, type_index);
 
             let v1_top_back = back_sec.ceilingplane.z_at_point(&v1);
@@ -256,7 +270,7 @@ impl LevelMesh {
             verts[3].x = v1.x;
             verts[1].y = v1.y;
             verts[3].y = v1.y;
-            let model = &doom_map.elements.sectors[x_floor.model as usize];
+            let model = &doom_map.elements.sectors.borrow()[x_floor.model as usize];
             verts[0].z = model.floorplane.z_at_point(v2) as f32;
             verts[1].z = model.floorplane.z_at_point(v1) as f32;
             verts[2].z = model.ceilingplane.z_at_point(v2) as f32;

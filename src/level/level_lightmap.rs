@@ -60,11 +60,23 @@ struct DynamicLights {}
 
 struct LightMode {}
 
-pub struct ColorMap {}
+pub struct ColorMap {
+    pub light_color: PalEntry,
+    pub fade_color: PalEntry,
+    pub desaturation: u8,
+    pub blend_factor: u8,
+    pub fog_density: u16
+}
+
+impl ColorMap {
+    pub fn new() -> ColorMap {
+        ColorMap { light_color: PalEntry::new(), fade_color: PalEntry::new(), desaturation: 0, blend_factor: 0, fog_density: 0 }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub enum PalEntry {
-    Argb {a: u8, r: u8, g: u8, b: u8},
+    Argb(Argb),
     D(u32)
 }
 
@@ -72,6 +84,54 @@ impl PalEntry {
     pub fn new() -> PalEntry {
         PalEntry::D(0)
     }
+
+    pub fn new_neg() -> PalEntry {
+        PalEntry::D(u32::max_value())
+    }
+
+    pub fn new_rgb(r: u8, g: u8, b: u8) -> PalEntry {
+        PalEntry::Argb(Argb{ a: 0, r, g, b })
+    }
+
+    pub fn d(&self) -> u32 {
+        match self {
+            PalEntry::D(t) => {return t.to_owned()}
+            PalEntry::Argb(t) => {return u32::from_le_bytes([t.a, t.r, t.g, t.b])}
+        }
+    }
+
+    pub fn argb(&self) -> Argb {
+        match self {
+            PalEntry::D(t) => {
+                let argb = t.to_le_bytes();
+                let a = argb[0];
+                let r = argb[1];
+                let g = argb[2];
+                let b = argb[3];
+                return Argb{a, r, g, b}
+            }
+            PalEntry::Argb(t) => {return t.to_owned()}
+        }
+    }
+
+    pub fn set_rgb(&mut self, other: u32) {
+        match self {
+            PalEntry::D(t) => {
+                *t = t.to_owned() & 0xffffff;
+            }
+            PalEntry::Argb(t) => {
+                *t = Argb{a: t.a & 0xff, b: t.b & 0xff, r: t.r & 0xff, g: t.g & 0xff};
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Argb {
+    a: u8,
+    r: u8,
+    g: u8,
+    b: u8
 }
 
 /*TODO maybe use Rc<T> instead of Box<T>, also maybe need to use RefCell<T>

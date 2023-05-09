@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 bitreader = "0.3.6"
 macroquad = "0.3.25"
+bitflags = "2.2.1"

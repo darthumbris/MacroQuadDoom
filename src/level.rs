@@ -1,5 +1,8 @@
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use crate::behavior::parse_level::WADLevelLinedef;
 use crate::vector::Vector2;
+use bitflags::bitflags;
 
 mod level_mesh;
 mod level_elements;
@@ -28,6 +31,7 @@ use level_poly::*;
 //TODO see what is needed etc
 //TODO reduce all the reference/Box etc and instead use something like keeping a vector with the indexes or somethign
 
+// #[derive(DerefMut)]
 pub struct LevelLocals {
     //TODO level,
 
@@ -104,7 +108,7 @@ pub struct LevelLocals {
     f1_pic: String,
 	//TODO translator: Box<Translator>,
 	//TODO map_type: MapType,
-	//TODO tag_manager: TagManager,
+	pub tag_manager: TagManager,
     //TODO interpolator: Interpolator,
 
 	shader_start_time: u64,
@@ -208,9 +212,45 @@ pub struct LevelLocals {
     //TODO acs_thinker,
 
     //TODO spot_state,
+
+    pub sky_flat_num: TextureID
 }
 
+impl DerefMut for LevelLocals {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.elements
+    }
+}
 
+impl Deref for LevelLocals {
+    type Target = LevelElements;
+    fn deref(&self) -> &Self::Target {
+        &self.elements
+    }
+}
+
+impl LevelLocals {
+    pub fn translate_sector_special(&self, special: i16) -> i32 {
+        //TODO implement this
+        0
+    }
+
+    pub fn translate_linedef(&self, line: &Line, linedef: &WADLevelLinedef, line_index: i32) {
+        //TODO
+    }
+}
+
+pub struct TagManager {} //TODO
+
+impl TagManager {
+    pub fn add_sector_tag(&self, i: usize, tag: i16) {
+        //TODO
+    }
+
+    pub fn add_line_id(&self, i: usize, tag: u16) {
+
+    }
+}
 
 
 
@@ -220,9 +260,27 @@ struct BaseDecal {}
 
 struct AutoMapLineStyle {}
 
+impl AutoMapLineStyle {
+    pub fn new() -> AutoMapLineStyle {
+        AutoMapLineStyle {  }
+    }
+}
+
 struct Particle {}
 
 struct LevelInfo {}
+
+bitflags! {
+    pub struct LevelFlags: u32 {
+   
+        const SndSeqTotalCtrl = 0x00001000;
+        const HasFadeTable = 0x00000008;
+        const Level2ClipMidTex = 0x00000200;
+        const Level2WrapMidTex = 0x00000400;
+        const Level2CheckSwitchRange = 0x00000800;
+        //TODO add all other values
+    }
+}
 
 
 

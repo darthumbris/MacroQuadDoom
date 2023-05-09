@@ -27,13 +27,13 @@ pub struct WADLevelBlockmap {
 }
 
 pub struct WADLevelSector {
-    floor_height: i16,
-    ceiling_height: i16,
-    floor_texture: String,
-    ceiling_texture: String,
-    light_level: i16,
-    special: i16,
-    tag: i16
+    pub floor_height: i16,
+    pub ceiling_height: i16,
+    pub floor_texture: String,
+    pub ceiling_texture: String,
+    pub light_level: i16,
+    pub special: i16,
+    pub tag: i16
 }
 
 pub struct WADLevelSubSector {
@@ -65,29 +65,32 @@ pub struct WADLevelSidedef {
     middle_texture: String,
 }
 
-struct WADLevelHexenLinedef {
-    type_: u8,
-    arg1: u8,
-    arg2: u8,
-    arg3: u8,
-    arg4: u8,
-    arg5: u8
+#[derive(Clone)]
+pub struct WADLevelHexenLinedef {
+    pub type_: u8,
+    pub arg1: u8,
+    pub arg2: u8,
+    pub arg3: u8,
+    pub arg4: u8,
+    pub arg5: u8
 }
 
-struct WADLevelDoomLinedef {
-    types: u16,
-    tag: u16,
+#[derive(Clone)]
+pub struct WADLevelDoomLinedef {
+    pub types: u16,
+    pub tag: u16,
 }
 
+#[derive(Clone)]
 pub struct WADLevelLinedef
 {
   pub from: u16,
   pub to: u16,
-  flags: u16,
-  doom: Option<WADLevelDoomLinedef>,
-  hex: Option<WADLevelHexenLinedef>,
-  right_sidedef: u16,
-  left_sidedef: u16
+  pub flags: u16,
+  pub doom: Option<WADLevelDoomLinedef>,
+  pub hex: Option<WADLevelHexenLinedef>,
+  pub front_sidedef: u16,
+  pub back_sidedef: u16
 }
 
 struct WADLevelHexenThing {
@@ -141,7 +144,9 @@ pub struct WADLevel {
     pub sectors: Vec<WADLevelSector>,
     // blockmap: WADLevelBlockmap,
     pub reject: Vec<Vec<bool>>,
-    pub format: Format
+    pub format: Format,
+    pub has_behavior: bool,
+    pub is_text: bool
     // behavior, (HEXEN and udmf only)
     // znodes (udmf only)
 }
@@ -242,16 +247,16 @@ fn parse_hexen_linedefs(lump: &Vec<u8>) -> Vec<WADLevelLinedef> {
         let arg3 = read_u8(lump, &mut offset).unwrap();
         let arg4 = read_u8(lump, &mut offset).unwrap();
         let arg5 = read_u8(lump, &mut offset).unwrap();
-        let right_sidedef = read_ushort(lump, &mut offset).unwrap();
-        let left_sidedef = read_ushort(lump, &mut offset).unwrap();
+        let front_sidedef = read_ushort(lump, &mut offset).unwrap();
+        let back_sidedef = read_ushort(lump, &mut offset).unwrap();
         let linedef  = WADLevelLinedef {
             from,
             to,
             flags,
             doom: None,
             hex: Some(WADLevelHexenLinedef { type_, arg1, arg2, arg3, arg4, arg5}),
-            right_sidedef,
-            left_sidedef
+            front_sidedef,
+            back_sidedef
         };
         linedefs.push(linedef);
     }
@@ -270,16 +275,16 @@ fn parse_linedefs(lump: &Vec<u8>) -> Vec<WADLevelLinedef> {
         let flags = read_ushort(lump, &mut offset).unwrap();
         let types = read_ushort(lump, &mut offset).unwrap();
         let tag = read_ushort(lump, &mut offset).unwrap();
-        let right_sidedef = read_ushort(lump, &mut offset).unwrap();
-        let left_sidedef = read_ushort(lump, &mut offset).unwrap();
+        let front_sidedef = read_ushort(lump, &mut offset).unwrap();
+        let back_sidedef = read_ushort(lump, &mut offset).unwrap();
         let linedef  = WADLevelLinedef {
             from,
             to,
             flags,
             doom: Some(WADLevelDoomLinedef { types, tag }),
             hex: None,
-            right_sidedef,
-            left_sidedef
+            front_sidedef,
+            back_sidedef
         };
         linedefs.push(linedef);
     }
@@ -541,6 +546,8 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
 
     let name = wad_parsed.directory[index].name.to_string();
     if format == Format::DOOM || format == Format::HEXEN {
+        let mut has_behavior = false;
+        let is_text = false;
         let things;
         let linedefs;
         let sidedefs = parse_sidedefs(&get_lump_from_dir(index + Lumps::SIDEDEFS as usize, wad_parsed, wad_data));
@@ -554,12 +561,13 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         if format == Format::DOOM {
             things = parse_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
             linedefs = parse_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
-            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text });
         }
         else if format == Format::HEXEN {
+            has_behavior = true;
             things = parse_hexen_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
             linedefs = parse_hexen_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
-            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format });
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text });
         }
     }
     
