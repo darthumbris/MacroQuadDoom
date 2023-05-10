@@ -156,7 +156,7 @@ impl Side {
     }
 
     pub fn set_texture(&mut self, which: usize, tex: TextureID) {
-        self.textures[which] = tex;
+        self.textures[which].texture = tex;
     }
 }
 

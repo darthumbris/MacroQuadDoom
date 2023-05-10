@@ -262,7 +262,7 @@ impl TagManager {
 
 #[derive(Clone, Copy)]
 pub struct Part {
-    texture: TextureID,
+    pub texture: TextureID,
     //TODO
 }
 

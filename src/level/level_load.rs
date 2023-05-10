@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -246,8 +247,8 @@ impl MapLoader<'_, '_> {
                 middle_texture,
                 bottom_texture
             };
-
-            Self::process_side_textures(self, !map.has_behavior, &side, side.sector, &imsd, missing_textures, &sideinit);
+            let sec = side.sector;
+            Self::process_side_textures(self, !map.has_behavior, &mut side, sec, &imsd, missing_textures, &sideinit);
 
         }
     }
@@ -364,24 +365,24 @@ impl MapLoader<'_, '_> {
 
     }
 
-    fn process_side_textures(&self, check_transfer_map:bool, side: &Side, sector: SectorIndex, imsd: &MapSideDef, missing_textures: &MissingTextureTracker, sideinit: &SideInit) {
+    fn process_side_textures(&self, check_transfer_map:bool, side: &mut Side, sector: SectorIndex, imsd: &MapSideDef, missing_textures: &MissingTextureTracker, sideinit: &SideInit) {
         match sideinit {
             SideInit::A(t) => {
-                let sec = &self.level.sectors[sector as usize].borrow();
+                let sec = &self.level.sectors[sector as usize];
                 match t.special {
                     209 /*Tranfer_Heights */ => {
                         if sector != -1 {
-                            Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &sec.bottom_map, &imsd.bottom_texture);
-                            Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &sec.mid_map, &imsd.middle_texture);
-                            Self::set_texture_side_blend(&self, side, Sides::Top.bits() as usize, &sec.top_map, &imsd.top_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &sec.borrow_mut().bottom_map, &imsd.bottom_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &sec.borrow_mut().mid_map, &imsd.middle_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Top.bits() as usize, &sec.borrow_mut().top_map, &imsd.top_texture);
                         }
                     }
 
                     190 /*Static_INIT*/ => {
                         let color:u32 = u32::from_le_bytes([0,255,255,255]);
                         let fog:u32 = 0;
-                        let color_good: bool;
-                        let fog_good: bool;
+                        let color_good: bool = false;
+                        let fog_good: bool = false;
 
                         Self::set_texture_side_no_error(self,side, Sides::Bottom.bits() as usize, &fog, &imsd.bottom_texture, &fog_good, true);
                         Self::set_texture_side_no_error(self,side, Sides::Top.bits() as usize, &color, &imsd.top_texture, &color_good, false);
