@@ -222,7 +222,6 @@ impl LevelMesh {
         let type_index = side.index();
 
         let dx = Vector2::<f32> {x: v2.x, y: v2.y};
-        let dist = dx.length();
 
         if back_index >= 0 {
             let back_sec = &doom_map.elements.sectors[back_index as usize].borrow_mut();

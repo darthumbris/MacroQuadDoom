@@ -154,6 +154,10 @@ impl Side {
     pub fn set_texture_y_scale(&mut self, scale: f64) {
 
     }
+
+    pub fn set_texture(&mut self, which: usize, tex: TextureID) {
+        self.textures[which] = tex;
+    }
 }
 
 #[derive(Clone)]
@@ -214,9 +218,9 @@ pub struct Sector {
     valid_count: i32,
 
     //color maps
-    bottom_map: u32,
-    mid_map: u32,
-    top_map: u32,
+    pub bottom_map: u32,
+    pub mid_map: u32,
+    pub top_map: u32,
 
     trans_door: bool,
     pub light_level: i16,
@@ -332,6 +336,12 @@ bitflags! {
         const ClipMidTex = 0x00080000;
         const WrapMidTex = 0x00100000;
         const CheckSwitchRange = 0x00400000;
+    }
+
+    pub struct Sides: u32 {
+        const Top = 0;
+        const Mid = 1;
+        const Bottom = 2;
     }
 }
 

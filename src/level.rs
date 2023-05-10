@@ -239,6 +239,11 @@ impl LevelLocals {
     pub fn translate_linedef(&self, line: &Line, linedef: &WADLevelLinedef, line_index: i32) {
         //TODO
     }
+
+    pub fn sector_has_tag(&self, index: usize, tag: i16) -> bool {
+        //TODO
+        false
+    }
 }
 
 pub struct TagManager {} //TODO
@@ -256,11 +261,14 @@ impl TagManager {
 
 
 #[derive(Clone, Copy)]
-pub struct Part {}
+pub struct Part {
+    texture: TextureID,
+    //TODO
+}
 
 impl Part {
     pub fn new() -> Part {
-        Part {  }
+        Part { texture: TextureID { tex_num: 0 } }
     }
 }
 

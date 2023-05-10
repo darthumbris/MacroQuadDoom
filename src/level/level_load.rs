@@ -5,7 +5,7 @@ use crate::behavior::parse_level::WADLevelLinedef;
 use crate::parser::parse_level::WADLevel;
 
 use super::LevelLocals;
-use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex};
+use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides};
 use super::level_lightmap::PalEntry;
 use super::level_texture::{MissingTextureTracker, TextureID, TextureManager, MapSideDef};
 use super::LevelFlags;
@@ -69,8 +69,8 @@ impl MapLoader<'_, '_> {
             sector.set_plane_tex_z(ceiling, f64::from(ms.ceiling_height), None);
             sector.ceilingplane.set(0., 0., -1., sector.get_plane_tex_z(ceiling));
     
-            Self::set_texture(self, &mut sector, i, floor, &mut ms.floor_texture, missing_textures, true);
-            Self::set_texture(self, &mut sector, i, ceiling, &mut ms.ceiling_texture, missing_textures, true);
+            Self::set_texture_sector(self, &mut sector, i, floor, &mut ms.floor_texture, missing_textures, true);
+            Self::set_texture_sector(self, &mut sector, i, ceiling, &mut ms.ceiling_texture, missing_textures, true);
     
             sector.light_level = ms.light_level;
     
@@ -247,7 +247,7 @@ impl MapLoader<'_, '_> {
                 bottom_texture
             };
 
-            Self::process_side_textures(self, !map.has_behavior, &side, side.sector, &imsd, missing_textures);
+            Self::process_side_textures(self, !map.has_behavior, &side, side.sector, &imsd, missing_textures, &sideinit);
 
         }
     }
@@ -335,7 +335,7 @@ impl MapLoader<'_, '_> {
         //TODO
     }
 
-    fn set_texture(&self, sector: &mut Sector, index: usize, pos: usize, name: &mut String, track: &MissingTextureTracker, truncate: bool) {
+    fn set_texture_sector(&self, sector: &mut Sector, index: usize, pos: usize, name: &mut String, track: &MissingTextureTracker, truncate: bool) {
         //TODO
         let position_names = ["floor", "ceiling"];
     
@@ -352,8 +352,84 @@ impl MapLoader<'_, '_> {
         sector.set_texture(pos, texture);
     }
 
-    fn process_side_textures(&self, check_transfer_map:bool, side: &Side, sector: SectorIndex, imsd: &MapSideDef, missing_textures: &MissingTextureTracker) {
+    fn set_texture_side_blend(&self, side: &Side, pos: usize, blend: &u32, name: &String) {
 
+    }
+
+    fn set_texture_side(&self, side: &Side, pos: usize, name: &String, missing_textures: &MissingTextureTracker) {
+
+    }
+
+    fn set_texture_side_no_error(&self, side: &Side, pos: usize, color: &u32, name: &String, valid_color: &bool, is_fog: bool) {
+
+    }
+
+    fn process_side_textures(&self, check_transfer_map:bool, side: &Side, sector: SectorIndex, imsd: &MapSideDef, missing_textures: &MissingTextureTracker, sideinit: &SideInit) {
+        match sideinit {
+            SideInit::A(t) => {
+                let sec = &self.level.sectors[sector as usize].borrow();
+                match t.special {
+                    209 /*Tranfer_Heights */ => {
+                        if sector != -1 {
+                            Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &sec.bottom_map, &imsd.bottom_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &sec.mid_map, &imsd.middle_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Top.bits() as usize, &sec.top_map, &imsd.top_texture);
+                        }
+                    }
+
+                    190 /*Static_INIT*/ => {
+                        let color:u32 = u32::from_le_bytes([0,255,255,255]);
+                        let fog:u32 = 0;
+                        let color_good: bool;
+                        let fog_good: bool;
+
+                        Self::set_texture_side_no_error(self,side, Sides::Bottom.bits() as usize, &fog, &imsd.bottom_texture, &fog_good, true);
+                        Self::set_texture_side_no_error(self,side, Sides::Top.bits() as usize, &color, &imsd.top_texture, &color_good, false);
+                        Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
+
+                        if color_good | fog_good {
+                            for i in 0..self.level.sectors.len() {
+                                if self.level.sector_has_tag(i, t.tag) {
+                                    if color_good {
+                                        self.level.sectors[i].borrow_mut().color_map.light_color.set_rgb(color);
+                                        self.level.sectors[i].borrow_mut().color_map.blend_factor = (color >> 24 & 0xff) as u8;
+                                    }
+                                    if fog_good {
+                                        self.level.sectors[i].borrow_mut().color_map.fade_color.set_rgb(fog);
+                                    }
+                                }
+                            }
+                        }
+                    }   
+
+                    160 /*Sector_Set3dFloor */ => {
+                        if imsd.top_texture.chars().nth(0).unwrap() == '#' {
+                            let mut shortened = imsd.top_texture.clone();
+                            shortened.remove(0);
+                            let id = shortened.to_string().parse::<i128>().unwrap();
+                            side.set_texture(Sides::Top.bits() as usize, TextureID { tex_num: id as i32});
+                        }
+                        else {
+                            Self::set_texture_side(self,side, Sides::Top.bits() as usize, &imsd.top_texture, missing_textures);
+                        }
+
+                        Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
+                        Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
+                    }
+                    208 /*Translucent Line */ => {
+                        //TODO
+                    }
+                    _ => {
+                        Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
+                        Self::set_texture_side(self,side, Sides::Top.bits() as usize, &imsd.top_texture, missing_textures);
+                        Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
+                    }                 
+                }
+
+            }
+
+            SideInit::B(t) => {}
+        }
     }
 }
 
