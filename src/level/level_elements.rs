@@ -1,4 +1,4 @@
-use std::ops::DerefMut;
+use std::borrow::Borrow;
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 
@@ -22,6 +22,7 @@ pub type SegIndex = i32; //if -1 -> does not exist (NULL)
 pub type SideDefIndex = i32; //if -1 -> does not exist (NULL)
 pub type VertexIndex = i32;
 
+#[derive(Clone)]
 pub struct SubSector {
     pub sector: SectorIndex,
     polys: Box<PolyNode>,
@@ -48,8 +49,8 @@ pub struct SubSector {
 }
 
 pub struct Line {
-    pub v1: Rc<Vertex>,
-    pub v2: Rc<Vertex>,
+    pub v1: Vertex,
+    pub v2: Vertex,
     delta: Vector2<f64>,
 
     pub flags: u32,
@@ -76,7 +77,7 @@ pub struct Line {
 
 impl Line {
     pub fn new() -> Line {
-        Line { v1: Rc::new(Vertex::new(0, 0)), v2: Rc::new(Vertex::new(0, 0)), delta: Vector2::<f64>::new(), flags: 0, flags2: 0, activation: 0, special: 0, args: [0;5], alpha: 0., sidedef: [-1;2], bbox: [0.;4], front_sector: -1, back_sector: -1, valid_count: 0, lock_number: 0, portal_index: 0, portal_transfered: 0, auto_map_style: AutoMapLineStyle::new(), health: 0, health_group: 0, line_num: 0 }
+        Line { v1: Vertex::new(0, 0), v2: Vertex::new(0, 0), delta: Vector2::<f64>::new(), flags: 0, flags2: 0, activation: 0, special: 0, args: [0;5], alpha: 0., sidedef: [-1;2], bbox: [0.;4], front_sector: -1, back_sector: -1, valid_count: 0, lock_number: 0, portal_index: 0, portal_transfered: 0, auto_map_style: AutoMapLineStyle::new(), health: 0, health_group: 0, line_num: 0 }
     }
 
     pub fn adjust_line(&self) {
@@ -84,20 +85,21 @@ impl Line {
     }
 }
 
+#[derive(Clone)]
 pub struct Side {
     pub sector: SectorIndex, //sector sidedef is facing //geen option
-    attached_decals: Box<BaseDecal>,
+    attached_decals: Option<BaseDecal>,
     textures: [Part;3],
-    pub linedef: Box<Line>, //is geen option
+    pub linedef: LineDefIndex, //is geen option
     left_side: u32,
     right_side: u32,
     texel_length: u16,
     light: i16,
     tier_lights: [i16;3],
-    flags: u16,
-    udmf_index: i32,
-    light_head: Box<LightNode>,
-    lightmap: Box<LightMapSurface>,
+    pub flags: u16,
+    pub udmf_index: i32,
+    light_head: Option<LightNode>,
+    lightmap: Option<LightMapSurface>,
     segs: Vec<SegIndex>, //all segs in ascending order
     num_segs: i32,
     side_num: i32,
@@ -106,26 +108,51 @@ pub struct Side {
 }
 
 impl Side {
-    pub fn v1(&self) -> &Vertex {
-        if self.linedef.sidedef[0] >= 0 {
-            return &self.linedef.v1
-        }
-        else {
-            return &self.linedef.v2
-        }
+    pub fn new() -> Side {
+        Side { sector: -1, attached_decals: None, textures: [Part::new(); 3], linedef: 0, left_side: 0, right_side: 0, texel_length: 0, light: 0, tier_lights: [0;3], 
+            flags: 0, udmf_index: 0, light_head: None, lightmap: None, segs: vec![], num_segs: -1, side_num: 0 }
     }
 
-    pub fn v2(&self) -> &Vertex {
-        if self.linedef.sidedef[0] >= 0 {
-            return &self.linedef.v2
-        }
-        else {
-            return &self.linedef.v1
-        }
-    }
+    // pub fn v1<'b>(& self, level: &'b LevelLocals) -> &'b Vertex {
+    //     let line = level.lines[self.linedef as usize];
+    //     let v1 = line.borrow_mut().v1.borrow();
+    //     let v2 = line.borrow_mut().v2.borrow();
+    //     if line.borrow_mut().sidedef[0] >= 0 {
+    //         return v1
+    //     }
+    //     else {
+    //         return v2
+    //     }
+    // }
+
+    // pub fn v2<'b>(& self, level: &'b LevelLocals) -> &'b Vertex {
+    //     let linedef = &level.lines[self.linedef as usize].borrow_mut();
+    //     if linedef.sidedef[0] >= 0 {
+    //         return &linedef.v2.borrow()
+    //     }
+    //     else {
+    //         return &linedef.v1.borrow()
+    //     }
+    // }
 
     pub fn index(&self) -> i32{
         self.side_num
+    }
+
+    pub fn set_texture_x_offset(&mut self, offset: f64) {
+        
+    }
+
+    pub fn set_texture_y_offset(&mut self, offset: f64) {
+
+    }
+
+    pub fn set_texture_x_scale(&mut self, scale: f64) {
+
+    }
+
+    pub fn set_texture_y_scale(&mut self, scale: f64) {
+
     }
 }
 
@@ -164,10 +191,10 @@ impl Vertex {
     }
 }
 
-// #[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Sector {
     splane: [Splane;2],
-    pub level: Option<RefCell<Weak<LevelLocals>>>,
+    pub level: Option<RefCell<Weak<RefCell<LevelLocals>>>>,
     pub e: ExtSectorIndex, //geen option
     pub floorplane: SectorPlane,
     pub ceilingplane: SectorPlane,
@@ -333,27 +360,28 @@ impl Sector {
 
     fn set_all_vertices_dirty(&mut self) {
         Self::set_vertices_dirty(self);
-        let ext_sector = &self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap().elements.extsectors[self.e as usize];
-        let mut binding = &mut self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap();
-        let sectors = &mut binding.deref_mut().sectors;
+        let binding = &mut self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap();
+        let ext_sector = &binding.borrow_mut().elements.extsectors[self.e as usize];
+        let mut bind = binding.borrow_mut();
+        let sectors = &mut bind.sectors;
         for i in 0..ext_sector.fake_floor.len() {
             let index = ext_sector.fake_floor[i] as usize;
-            sectors.borrow_mut()[index].set_all_vertices_dirty();
+            sectors[index].borrow_mut().set_all_vertices_dirty();
         }
 
         for i in 0..ext_sector.x_floor.attached.len() {
             let index = ext_sector.x_floor.attached[i] as usize;
-            sectors.borrow_mut()[index].set_all_vertices_dirty();
+            sectors[index].borrow_mut().set_all_vertices_dirty();
         }
     }
 
     fn set_vertices_dirty(&mut self) {
-        let ext_sector = &self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap().elements.extsectors[self.e as usize];
-        let mut binding = &mut self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap();
-        let vertices = &mut binding.deref_mut().vertexes;
+        let binding = &mut self.level.as_mut().unwrap().borrow_mut().upgrade().unwrap();
+        let ext_sector = &binding.borrow_mut().elements.extsectors[self.e as usize];
+        let vertices = &mut binding.borrow_mut().vertexes;
         for i in 0..ext_sector.vertices.len() {
             let index = ext_sector.vertices[i] as usize;
-            vertices.borrow_mut()[index].dirty = true;
+            vertices[index].borrow_mut().dirty = true;
         }
     }
 
@@ -371,6 +399,10 @@ impl Sector {
 
     pub fn set_y_scale(&mut self, pos: usize, val: f64) {
         self.splane[pos].x_form.y_scale = val;
+    }
+
+    pub fn set_texture(&mut self, pos: usize, texure: TextureID) {
+
     }
 }
 
@@ -396,6 +428,7 @@ pub struct Seg {
     seg_num: i32,
 }
 
+#[derive(Clone)]
 struct Section {
 
 }
@@ -476,13 +509,13 @@ struct LinkedSector {
 }
 
 pub struct LevelElements {
-    pub vertexes: RefCell<Vec<Rc<Vertex>>>,
-    pub sectors: RefCell<Vec<Rc<Sector>>>,
+    pub vertexes: Vec<Rc<RefCell<Vertex>>>,
+    pub sectors: Vec<Rc<RefCell<Sector>>>,
     pub extsectors: Vec<ExtSector>,
     line_buffer: Vec<Box<Line>>,
     subsector_buffer: Vec<Box<SubSector>>,
-    pub lines: Vec<Line>,
-    pub sides: Vec<Side>,
+    pub lines: Vec<Rc<RefCell<Line>>>, //TODO this maybe the correct one
+    pub sides: Vec<Rc<RefCell<Side>>>,
     seg_buffer: Vec<Box<Seg>>,
     pub segs: Vec<Seg>,
     pub subsectors: Vec<SubSector>,
@@ -520,8 +553,8 @@ impl Splane {
     }
 }
 
-#[derive(Default)]
-struct SecNode{
+#[derive(Default, Clone)]
+pub struct SecNode{
     sector: Option<Box<Sector>>,
     thing: Actor,
     thing_prev: Box<SecNode>,

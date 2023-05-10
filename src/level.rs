@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use crate::behavior::parse_level::WADLevelLinedef;
 use crate::vector::Vector2;
 use bitflags::bitflags;
@@ -254,9 +255,17 @@ impl TagManager {
 
 
 
-struct Part {}
+#[derive(Clone, Copy)]
+pub struct Part {}
 
-struct BaseDecal {}
+impl Part {
+    pub fn new() -> Part {
+        Part {  }
+    }
+}
+
+#[derive(Clone)]
+pub struct BaseDecal {}
 
 struct AutoMapLineStyle {}
 

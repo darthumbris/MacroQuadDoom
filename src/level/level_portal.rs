@@ -1,3 +1,6 @@
+
+
+#[derive(Clone)]
 pub struct PortalCoverage {
     subsectors: Vec<u32>, //pointer to subsectors
     subsector_count: i32

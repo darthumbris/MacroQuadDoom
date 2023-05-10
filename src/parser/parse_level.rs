@@ -57,12 +57,12 @@ pub struct WADLevelVertex {
 }
 
 pub struct WADLevelSidedef {
-    x_offset: i16,
-    y_offset: i16,
-    sector: u16,
-    upper_texture: String,
-    lower_texture: String,
-    middle_texture: String,
+    pub x_offset: i16,
+    pub y_offset: i16,
+    pub sector: u16,
+    pub upper_texture: String,
+    pub lower_texture: String,
+    pub middle_texture: String,
 }
 
 #[derive(Clone)]

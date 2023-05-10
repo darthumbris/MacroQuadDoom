@@ -11,6 +11,7 @@ pub struct LightMaps {
     tex_data: Vec<u16>,
 }
 
+#[derive(Clone)]
 pub struct LightMapSurface {
     type_: SurfaceType,
     subsector: Box<SubSector>,
@@ -20,7 +21,7 @@ pub struct LightMapSurface {
     tex_coords: Vec<f32>
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum SurfaceType {
     STNull,
 	STMiddleWall,
@@ -30,6 +31,7 @@ pub enum SurfaceType {
 	STFloor
 }
 
+#[derive(Clone)]
 pub struct LightNode {}
 
 pub struct LightProbes {
@@ -60,6 +62,7 @@ struct DynamicLights {}
 
 struct LightMode {}
 
+#[derive(Clone)]
 pub struct ColorMap {
     pub light_color: PalEntry,
     pub fade_color: PalEntry,
@@ -127,7 +130,7 @@ impl PalEntry {
 }
 
 #[derive(Clone, Copy)]
-struct Argb {
+pub struct Argb {
     a: u8,
     r: u8,
     g: u8,
