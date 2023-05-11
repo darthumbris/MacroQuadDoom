@@ -8,6 +8,7 @@ pub mod level;
 pub mod vector;
 
 pub mod behavior;
+pub mod file_system;
 
 pub use movement::movement;
 pub use render::render;

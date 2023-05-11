@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -8,8 +7,9 @@ use crate::parser::parse_level::WADLevel;
 use super::LevelLocals;
 use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides};
 use super::level_lightmap::PalEntry;
-use super::level_texture::{MissingTextureTracker, TextureID, TextureManager, MapSideDef};
+use super::level_texture::{MissingTextureTracker, TextureID, TextureManager, MapSideDef, TextureType, TexManFlags, FakeColorMap};
 use super::LevelFlags;
+use crate::file_system::FileSystem;
 
 pub struct MapLoader<'a, 'b> {
     pub level: &'a mut  LevelLocals,
@@ -19,12 +19,13 @@ pub struct MapLoader<'a, 'b> {
     side_count: i32,
     line_map: Vec<i32>,
     side_temp: Vec<SideInit>,
-    
+    file_system: Option<FileSystem>,
+    fake_color_maps: Vec<FakeColorMap>
 }
 
 impl MapLoader<'_, '_> {
     pub fn new<'a, 'b>(level: &'a mut LevelLocals, tex_manager: &'b TextureManager) -> MapLoader<'a, 'b>{
-        MapLoader { level, tex_manager, force_node_build: false, side_count: 0, line_map: vec![], side_temp: vec![] }
+        MapLoader { level, tex_manager, force_node_build: false, side_count: 0, line_map: vec![], side_temp: vec![], file_system: None, fake_color_maps: vec![] }
     }
 
     /* 
@@ -337,14 +338,13 @@ impl MapLoader<'_, '_> {
     }
 
     fn set_texture_sector(&self, sector: &mut Sector, index: usize, pos: usize, name: &mut String, track: &MissingTextureTracker, truncate: bool) {
-        //TODO
         let position_names = ["floor", "ceiling"];
     
         if truncate { name.pop(); }
-        let mut texture: TextureID = self.tex_manager.check_for_texture();
+        let mut texture: TextureID = self.tex_manager.check_for_texture(name, TextureType::Flat, TexManFlags::Overridable.bits() | TexManFlags::TryAny.bits());
 
         if !texture.exists() {
-             if track.contains_key(name) && track.get(name).unwrap().count <= 20 /*Missing_texture_warn_limit */ {
+            if track.contains_key(name) && track.get(name).unwrap().count <= 20 /*Missing_texture_warn_limit */ {
                 println!("unkown {:?} texture {:?} in sector {}", position_names[pos], name, index);
             }
             
@@ -353,16 +353,106 @@ impl MapLoader<'_, '_> {
         sector.set_texture(pos, texture);
     }
 
-    fn set_texture_side_blend(&self, side: &Side, pos: usize, blend: &u32, name: &String) {
+    fn set_texture_side_blend(&self, side: &mut Side, pos: usize, blend: &mut u32, name: &String) {
+        let mut texture: TextureID;
+        *blend = Self::color_map_for_name(&self, name);
+        if *blend == 0 {
+            texture = self.tex_manager.check_for_texture(name, TextureType::Wall, TexManFlags::Overridable.bits() | TexManFlags::TryAny.bits());
+            if !texture.exists() {
+                let mut short = name.clone();
+                short.truncate(8);
+                *blend = u32::from_str_radix(&short.to_string(), 16).unwrap();
 
+                texture = TextureID::new();
+            }
+            else {*blend = 0;}
+        }
+        else { texture = TextureID::new(); }
+        side.set_texture(pos, texture);
     }
 
-    fn set_texture_side(&self, side: &Side, pos: usize, name: &String, missing_textures: &MissingTextureTracker) {
+    fn set_texture_side(&self, side: &mut Side, pos: usize, name: &String, track: &MissingTextureTracker) {        
+        let position_names = ["top", "middle", "bottom"];
+        let side_names = ["first", "second"];
 
+        let mut texture = self.tex_manager.check_for_texture(name, TextureType::Wall, TexManFlags::Overridable.bits() | TexManFlags::TryAny.bits());
+
+        if !texture.exists() {
+            if track.contains_key(name) && track.get(name).unwrap().count <= 20 /*Missing_texture_warn_limit */ {
+                //error for all things that use this side
+                for i in 0..self.level.lines.len() {
+                    for j in 0..2 {
+                        if self.level.lines[i].borrow().sidedef[j] == side.udmf_index { //TODO not completly sure about the udfm_index
+                            println!("unkown {:?} texture {:?} on {} side of linedef {}", position_names[pos], name, side_names[j], i);
+                        }
+                    }
+                }
+            }
+            texture = self.tex_manager.get_default_texture();
+        }
+        side.set_texture(pos, texture);
     }
 
-    fn set_texture_side_no_error(&self, side: &Side, pos: usize, color: &u32, name: &String, valid_color: &bool, is_fog: bool) {
+    fn set_texture_side_no_error(&self, side: &mut Side, pos: usize, color: &mut u32, name: &String, valid_color: &mut bool, is_fog: bool) {
+        let mut texture: TextureID;
 
+        *valid_color = false;
+        texture = self.tex_manager.check_for_texture(name, TextureType::Wall, TexManFlags::Overridable.bits() | TexManFlags::TryAny.bits());
+        if !texture.exists() {
+
+
+            if !name.starts_with("#") {
+                *color = u32::from_str_radix(&name.to_string(), 16).unwrap();
+                texture = TextureID::new();
+                // *valid_color = *stop == 0 && 
+                //TODO weird stuff here?
+                return
+            }
+            else {
+                let mut reduced = name.clone();
+                reduced.remove(0);
+                reduced.truncate(7);
+                let len = name.len();
+                texture = TextureID::new();
+                
+                if len >= 7 {
+                    let mut name2:Vec<u8> = vec![b'\0'; 7];
+                    for (i, c) in reduced.chars().enumerate() {
+                        match c {
+                            '0'..='9' | 'a'..='f' |'A'..='F' => {name2[i] = c as u8}
+                            _ => {name2[i] = b'0'}
+                        }
+                    }
+                    let mut factor;
+                    if len == 7 {factor = 0} else {
+                        let val = ((name2[6] as u8) & 223 - ('A' as u8)) as i32;
+                        factor = i32::clamp(val, 0, 25);
+                    }
+                    let bluestr = String::from_utf8(name2.clone()[4..6].to_vec()).unwrap();
+                    let greenstr = String::from_utf8(name2.clone()[2..4].to_vec()).unwrap();
+                    let redstr = String::from_utf8(name2.clone()[0..2].to_vec()).unwrap();
+                    let blue = i32::from_str_radix(&bluestr, 16).unwrap();
+                    let green = i32::from_str_radix(&greenstr, 16).unwrap();
+                    let red = i32::from_str_radix(&redstr, 16).unwrap();
+
+                    if !is_fog {
+                        if factor == 0 {
+                            *valid_color = false;
+                            return
+                        }
+                        factor = factor * 255 / 25;
+                    }
+                    else {
+                        factor = 0;
+                    }
+                    *color = u32::from_le_bytes([factor as u8, red as u8, green as u8, blue as u8]);
+                    texture = TextureID::new();
+                    *valid_color = true;
+                    return
+                }
+            }
+        }
+        side.set_texture(pos, texture);
     }
 
     fn process_side_textures(&self, check_transfer_map:bool, side: &mut Side, sector: SectorIndex, imsd: &MapSideDef, missing_textures: &MissingTextureTracker, sideinit: &SideInit) {
@@ -372,20 +462,20 @@ impl MapLoader<'_, '_> {
                 match t.special {
                     209 /*Tranfer_Heights */ => {
                         if sector != -1 {
-                            Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &sec.borrow_mut().bottom_map, &imsd.bottom_texture);
-                            Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &sec.borrow_mut().mid_map, &imsd.middle_texture);
-                            Self::set_texture_side_blend(&self, side, Sides::Top.bits() as usize, &sec.borrow_mut().top_map, &imsd.top_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &mut sec.borrow_mut().bottom_map, &imsd.bottom_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &mut sec.borrow_mut().mid_map, &imsd.middle_texture);
+                            Self::set_texture_side_blend(&self, side, Sides::Top.bits() as usize, &mut sec.borrow_mut().top_map, &imsd.top_texture);
                         }
                     }
 
                     190 /*Static_INIT*/ => {
-                        let color:u32 = u32::from_le_bytes([0,255,255,255]);
-                        let fog:u32 = 0;
-                        let color_good: bool = false;
-                        let fog_good: bool = false;
+                        let mut color:u32 = u32::from_le_bytes([0,255,255,255]);
+                        let mut fog:u32 = 0;
+                        let mut color_good: bool = false;
+                        let mut fog_good: bool = false;
 
-                        Self::set_texture_side_no_error(self,side, Sides::Bottom.bits() as usize, &fog, &imsd.bottom_texture, &fog_good, true);
-                        Self::set_texture_side_no_error(self,side, Sides::Top.bits() as usize, &color, &imsd.top_texture, &color_good, false);
+                        Self::set_texture_side_no_error(self,side, Sides::Bottom.bits() as usize, &mut fog, &imsd.bottom_texture, &mut fog_good, true);
+                        Self::set_texture_side_no_error(self,side, Sides::Top.bits() as usize, &mut color, &imsd.top_texture, &mut color_good, false);
                         Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
 
                         if color_good | fog_good {
@@ -418,7 +508,29 @@ impl MapLoader<'_, '_> {
                         Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
                     }
                     208 /*Translucent Line */ => {
-                        //TODO
+                        let mut lump_num = -1;
+                        if self.file_system.is_some() {
+                            lump_num = self.file_system.as_ref().unwrap().check_num_for_name(&imsd.middle_texture);
+                        }
+                        if check_transfer_map {
+                            if imsd.middle_texture.starts_with("TRANMAP") {
+                                side.set_texture(Sides::Mid.bits() as usize, TextureID::new());
+                            }
+                            else if lump_num > 0 && self.file_system.as_ref().unwrap().file_length(lump_num) == 65536 {
+                                //TODO
+
+
+                                side.set_texture(Sides::Mid.bits() as usize, TextureID::new());
+                            }
+                            else {
+                                Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
+                            }
+                        }
+                        else {
+                            Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
+                        }
+                        Self::set_texture_side(self,side, Sides::Top.bits() as usize, &imsd.top_texture, missing_textures);
+                        Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
                     }
                     _ => {
                         Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
@@ -426,11 +538,24 @@ impl MapLoader<'_, '_> {
                         Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
                     }                 
                 }
-
             }
-
             SideInit::B(t) => {}
         }
+    }
+
+
+    fn color_map_for_name(&self, name: &String) -> u32 {
+        if name.starts_with("COLORMAP") {
+            for i in (0..self.fake_color_maps.len() - 1).rev() {
+                if !self.fake_color_maps[i].name.starts_with(name) { //TODO should be strncmp(name, fc.name, 8)
+                    return i as u32
+                }
+            }
+            if name.starts_with("WATERMAP") { //TODO should be strncmp(name, "WATERMAP", 8)
+                return u32::from_le_bytes([128, 0, 0x4f, 0xa5]);
+            }
+        }
+        0
     }
 }
 
