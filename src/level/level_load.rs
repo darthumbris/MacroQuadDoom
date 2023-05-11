@@ -111,7 +111,6 @@ impl MapLoader<'_, '_> {
             sector.sector_num = i as i32;
             sector.ibo_count = -1;
             self.level.sectors.push(Rc::new(RefCell::new(sector)));
-            // sectors.push(sector);
         }
     }
 
@@ -255,16 +254,16 @@ impl MapLoader<'_, '_> {
     }
     
     fn finish_loading_linedefs(&mut self, map: &WADLevel) {
-    
+        //TODO
     }
     
     fn load_things(&mut self, map: &WADLevel) {
-    
+        //TODO
     }
     
     //This is for hexen map formats
     fn load_things2(&mut self, map: &WADLevel) {
-    
+        //TODO
     }
 
     fn set_side_num(&self, sidedef: &mut SideDefIndex, side_count: u16) {
@@ -273,7 +272,7 @@ impl MapLoader<'_, '_> {
             *sidedef = side_count as i32;
             match self.side_temp[side_count as usize] {
                 SideInit::A(mut t) => {t.map = side_count as u32}
-                SideInit::B(mut t) => {/*TODO What*/}
+                SideInit::B(_t) => {/*TODO What*/}
             }
         }
         else {eprintln!("{} sidedefs is not enough", side_count);}
@@ -290,13 +289,13 @@ impl MapLoader<'_, '_> {
                     t.special = line.special as i16;
                     t.tag = line.args[0] as i16;
                 }
-                SideInit::B(mut t) => {/*TODO What*/}
+                SideInit::B(_t) => {/*TODO What*/}
             }
         }
         else {
             match side_i {
                 SideInit::A(mut t) => { t.special = 0;}
-                SideInit::B(mut t) => {/*TODO What*/}
+                SideInit::B(_t) => {/*TODO What*/}
             }
         }
     }
@@ -316,7 +315,7 @@ impl MapLoader<'_, '_> {
                     t.alpha = i16::min_value();
                     t.map = u32::max_value();
                 }
-                SideInit::B(t) => {/*TODO What*/}
+                SideInit::B(_t) => {/*TODO What*/}
             }
         }
         if count < map.sidedefs.len() {
