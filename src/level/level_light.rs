@@ -1,5 +1,11 @@
+
+#[derive(Default)]
 pub struct DynamicLights {
 
 }
 
-pub enum LightMode {}
+#[derive(Default)]
+pub enum LightMode {
+    #[default]
+    NotSet = -1
+}

@@ -1,3 +1,6 @@
+
+
+#[derive(Default)]
 pub struct AABBTree {}
 
 #[derive(Clone)]

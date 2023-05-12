@@ -3,6 +3,7 @@ use super::level_elements::Sector;
 use super::level_elements::Side;
 use std::rc::Rc;
 
+#[derive(Default)]
 pub struct LightMaps {
     surfaces: Vec<LightMapSurface>,
     tex_coords: Vec<f32>,
@@ -21,7 +22,7 @@ pub struct LightMapSurface {
     tex_coords: Vec<f32>
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum SurfaceType {
     STNull,
 	STMiddleWall,
@@ -34,6 +35,7 @@ pub enum SurfaceType {
 #[derive(Clone)]
 pub struct LightNode {}
 
+#[derive(Default)]
 pub struct LightProbes {
     light_probes: Vec<LightProbe>,
     min_x: i32,

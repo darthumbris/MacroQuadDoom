@@ -2,9 +2,13 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::behavior::parse_level::WADLevelLinedef;
+use crate::game::{Game, GameType};
 use crate::parser::parse_level::WADLevel;
+use crate::vector::{Vector3, Vector2};
 
-use super::LevelLocals;
+use super::level_actor::ClassActor;
+use super::level_mesh::LevelMesh;
+use super::{LevelLocals, ActionSpecials, SpecialMapThings, MapThingFlags};
 use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides};
 use super::level_lightmap::PalEntry;
 use super::level_texture::{MissingTextureTracker, TextureID, TextureManager, MapSideDef, TextureType, TexManFlags, FakeColorMap};
@@ -14,7 +18,9 @@ use crate::file_system::FileSystem;
 pub struct MapLoader<'a, 'b> {
     pub level: &'a mut  LevelLocals,
     pub tex_manager: &'b TextureManager,
+    // pub game: Rc<Weak<Game>>,
     pub force_node_build: bool,
+    pub map_things_converted: Vec<MapThing>,
     // first_gl_vertex: i32,
     side_count: i32,
     line_map: Vec<i32>,
@@ -25,7 +31,7 @@ pub struct MapLoader<'a, 'b> {
 
 impl MapLoader<'_, '_> {
     pub fn new<'a, 'b>(level: &'a mut LevelLocals, tex_manager: &'b TextureManager) -> MapLoader<'a, 'b>{
-        MapLoader { level, tex_manager, force_node_build: false, side_count: 0, line_map: vec![], side_temp: vec![], file_system: None, fake_color_maps: vec![] }
+        MapLoader { level, tex_manager, force_node_build: false, side_count: 0, line_map: vec![], side_temp: vec![], file_system: None, fake_color_maps: vec![], map_things_converted: vec![] }
     }
 
     /* 
@@ -37,29 +43,88 @@ impl MapLoader<'_, '_> {
     /* This function will load a single level (i.e. e1m1) and for normal doom map may 
      * need a translator to make it a udmf like map?
      * also needs to load the scripts */
-    pub fn load_level() {
-    
+    pub fn load_level(&mut self, map: &mut WADLevel, game: &Game) {
+        /*TODO 
+         * loadbehavior()
+         * T_LoadScripts();
+         * Level->Behaviors.LoadDefaultModules();
+         * LoadMapinfoACSLump();
+         * LoadStrifeConversations();
+        */
+
+        let mut missing_textures: MissingTextureTracker = MissingTextureTracker::new();
+
+        if !map.is_text {
+            Self::load_vertexes(self, map);
+            println!("going to load sectors");
+            Self::load_sectors(self, map, &mut missing_textures);
+            println!("finished loading sectors");
+            println!("going to load lines");
+            if !map.has_behavior {Self::load_linedefs(self, map)}
+            else {Self::load_linedefs2(self, map)}
+            println!("finished loading lines");
+            println!("going to load sides");
+            Self::load_sidedefs(self, map, &mut missing_textures);
+            println!("finished loading sides");
+            Self::finish_loading_linedefs(self);
+            println!("finished loading sides");
+            println!("going to load things");
+            if !map.has_behavior {Self::load_things(self, map, game)}
+            else {Self::load_things2(self, map, game)}
+            println!("finished loading things");
+        }
+        else {
+            //TODO parse textmap
+        }
+
+        /* TODO
+         * CalcIndices();
+         * PostProcessLevel();
+         * LoopSidedefs();
+         * 
+         * 
+         * LoadBlockMap();
+         * LoadReject();
+         * 
+         * Spawn Functions
+         * 
+         * LoadLightMap();
+         */
+
+         println!("map has {} vertexes", self.level.vertexes.len());
+         println!("map has {} sectors", self.level.sectors.len()); //TODO check why no sectors
+         println!("map has {} lines", self.level.lines.len());
+         println!("map has {} sides", self.level.sides.len()); //TODO check why no sides
+         println!("map has {} segs", self.level.segs.len());
+         println!("map has {} subsectors", self.level.subsectors.len());
+         println!("map has {} nodes", self.level.nodes.len());
+
+        self.level.level_mesh = Rc::new(LevelMesh::new(&self.level, self.tex_manager));
     }
 
     fn load_vertexes(&mut self, map: &WADLevel) {
         if map.vertexes.len() == 0 {
             eprintln!("Map has no vertexes");
         }
+        println!("going to load: {} vertexes", map.vertexes.len());
         for v in &map.vertexes {
             self.level.vertexes.push(Rc::new(RefCell::new(Vertex::new(v.x, v.y))));
         }
+        println!("loaded vertexes: {}", self.level.vertexes.len());
     }
 
     fn load_sectors(&mut self, map: &mut WADLevel, missing_textures: &MissingTextureTracker) {
         let def_sec_type;
     
         if (self.level.flags & LevelFlags::SndSeqTotalCtrl.bits()) != 0 { def_sec_type = 0; } else {def_sec_type = 1;}
-    
+        println!("going to load: {} sectors", map.sectors.len());
         for i in 0..map.sectors.len() {
+            println!("going to load sector: {}", i);
             self.level.extsectors.push(ExtSector::new());
+            println!("made a new extsector: {}", i);
             let mut sector = Sector::new(i as i32);
+            println!("made a new sector: {}", i);
             let ms = &mut map.sectors[i];
-    
             if map.has_behavior {
                 sector.flags |= SectorFlags::FloorDrop.bits();
             }
@@ -110,7 +175,9 @@ impl MapLoader<'_, '_> {
             sector.move_factor = 2048./65536.;
             sector.sector_num = i as i32;
             sector.ibo_count = -1;
+            println!("going to push sector: {}", i);
             self.level.sectors.push(Rc::new(RefCell::new(sector)));
+            println!("pushed sector: {}", i);
         }
     }
 
@@ -119,6 +186,7 @@ impl MapLoader<'_, '_> {
 
         let mut line_count = map.linedefs.len();
         let mut side_count = map.sidedefs.len();
+        self.line_map.resize(line_count, 0);
         let mut skipped = 0;
         let mut i = 0;
     
@@ -144,6 +212,7 @@ impl MapLoader<'_, '_> {
             else {
                 side_count += 1;
                 if linedef.back_sidedef != 0xffff /*NO_INDEX */ {side_count += 1;}
+                self.line_map[i] = (i + skipped) as i32;
                 i +=1;
             }
         }
@@ -253,16 +322,144 @@ impl MapLoader<'_, '_> {
         }
     }
     
-    fn finish_loading_linedefs(&mut self, map: &WADLevel) {
-        //TODO
+    fn finish_loading_linedefs(&mut self) {
+        for i in 0..self.level.lines.len() {
+            let mut index = self.level.lines[i].borrow().sidedef[0] as usize;
+            if self.level.lines[i].borrow().sidedef[0] == -1 {index = 0}
+            println!("trying to acces: {} and len is: {}", index, self.side_temp.len());
+            println!("sidedef[0]: {}, i: {}", self.level.lines[i].borrow().sidedef[0], i);
+            match self.side_temp[index] {
+                SideInit::A(t) => { Self::finish_loading_linedef(self, i, t.alpha)}
+                SideInit::B(_) => {}
+            }
+        }
+    }
+
+    fn finish_loading_linedef(&mut self, line_index: usize, alpha: i16) {
+        let mut line = self.level.lines[line_index].borrow_mut();
+        let mut alpha = alpha;
+        let mut additive = false;
+
+        if line.sidedef[0] != -1 {line.front_sector = line.sidedef[0]} else {line.front_sector = -1}
+        if line.sidedef[1] != -1 {line.back_sector = line.sidedef[1]} else {line.back_sector = -1}
+        
+        let dx: f64 = line.v2.fx() - line.v1.fx();
+        let dy: f64 = line.v2.fy() - line.v1.fy();
+
+        let line_num = line.index() as usize;
+
+        if line.front_sector == -1 {println!("Line {} has no front sector", self.line_map[line_num])}
+
+        let len = ((dx * dx + dy * dy).sqrt() + 0.5) as i32;
+
+        if line.sidedef[0] != -1 {
+            let mut side = self.level.sides[line.sidedef[0] as usize].borrow_mut();
+            side.linedef = line_index as i32;
+            side.texel_length = len as u16;
+        }
+        if line.sidedef[1] != -1 {
+            let mut side = self.level.sides[line.sidedef[1] as usize].borrow_mut();
+            side.linedef = line_index as i32;
+            side.texel_length = len as u16;
+        }
+
+        let match_special = num::FromPrimitive::from_i32(line.special);
+        match match_special {
+            Some(ActionSpecials::TranslucentLine) => {
+                if alpha == i16::min_value() {
+                    alpha = line.args[1] as i16;
+                    if line.args[2] == 0 {additive = false} else {additive = true}
+                }
+                else if alpha < 0 {
+                    alpha = -alpha;
+                    additive = true;
+                }
+
+                let d_alpha: f64 = alpha as f64 / 255.;
+                if line.args[0] == 0 {
+                    line.alpha = d_alpha;
+                    if additive {line.flags |= LineFlags::AddTrans.bits()}
+                }
+                else {
+                    for j in 0..self.level.lines.len() {
+                        if self.level.line_has_id(j as i32, line.args[0]) {
+                            self.level.lines[j].borrow_mut().alpha = d_alpha;
+                            if additive {self.level.lines[j].borrow_mut().flags |= LineFlags::AddTrans.bits()}
+                        }
+                    }
+                }
+                line.special = 0;
+            }
+            _ => {}
+        }
+    }
+
+    fn make_skill(flags: i32) -> u16 {
+        let mut res: u16 = 0;
+        if (flags & 1) != 0 { res |= 1+2}
+        if (flags & 2) != 0 { res |= 4}
+        if (flags & 4) != 0 { res |= 8+16}
+        res
     }
     
-    fn load_things(&mut self, map: &WADLevel) {
+    fn load_things(&mut self, map: &WADLevel, game: &Game) {
+        let thing_count = map.things.len();
+
+        self.map_things_converted.resize_with(thing_count, || MapThing::default());
+        for i in 0..thing_count {
+            let mut mapthing = &mut self.map_things_converted[i];
+            let mut flags = map.things[i].options;
+
+            mapthing.gravity = 1.;
+            mapthing.conversation = 0;
+            mapthing.skill_filter = Self::make_skill(flags as i32);
+            mapthing.class_filter = 0xffff;
+            mapthing.render_style = 19; //TODO StyleCount
+            mapthing.alpha = -1.;
+            mapthing.health = 1.;
+            mapthing.float_bob_phase = -1;
+
+            mapthing.pos.x = map.things[i].x as f64;
+            mapthing.pos.y = map.things[i].y as f64;
+            mapthing.angle = map.things[i].angle;
+            mapthing.ed_num = map.things[i].type_;
+            //TODO mapthing.info
+
+            
+            //TODO is in an ifnded NO_EDATA
+            if mapthing.info.is_some() && mapthing.info.as_deref().unwrap().special == SpecialMapThings::SMT_EDThing.into() {
+                Self::process_eternity_map_thing(self);
+            }
+            else {
+                flags &= !MapThingFlags::SkillMask.bits() as i16;
+                mapthing.flags = (((flags & 0xf) | 0x7e0) as i16) as u32;
+                match game.game_info.game_type {
+                    GameType::Strife => {
+                        mapthing.flags &= !MapThingFlags::Ambush.bits();
+                        if flags as u32 & MapThingFlags::SShadow.bits() != 0 {mapthing.flags |= MapThingFlags::Shadow.bits()}
+                        if flags as u32 & MapThingFlags::SAltShadow.bits() != 0 {mapthing.flags |= MapThingFlags::AltShadow.bits()}
+                        if flags as u32 & MapThingFlags::SStandStill.bits() != 0 {mapthing.flags |= MapThingFlags::StandStill.bits()}
+                        if flags as u32 & MapThingFlags::SAmbush.bits() != 0 {mapthing.flags |= MapThingFlags::Ambush.bits()}
+                        if flags as u32 & MapThingFlags::SFriendly.bits() != 0 {mapthing.flags |= MapThingFlags::Friendly.bits()}
+                    }
+                    _ => {
+                        if flags as u32 & MapThingFlags::BBadEditorCheck.bits() != 0 {flags &= 0x1f}
+                        if flags as u32 & MapThingFlags::BNotDeathMatch.bits() != 0 {mapthing.flags |= MapThingFlags::DeathMatch.bits()}
+                        if flags as u32 & MapThingFlags::BNotCooperative.bits() != 0 {mapthing.flags |= MapThingFlags::Cooperative.bits()}
+                        if flags as u32 & MapThingFlags::BFriendly.bits() != 0 {mapthing.flags |= MapThingFlags::Friendly.bits()}
+                    }
+                }
+                if flags as u32 & MapThingFlags::BNotSingle.bits() != 0 {mapthing.flags |= MapThingFlags::Single.bits()}
+            }
+        }
+    }
+
+    fn process_eternity_map_thing(&self) {
         //TODO
     }
     
     //This is for hexen map formats
-    fn load_things2(&mut self, map: &WADLevel) {
+    fn load_things2(&mut self, map: &WADLevel, game: &Game) {
         //TODO
     }
 
@@ -458,8 +655,9 @@ impl MapLoader<'_, '_> {
         match sideinit {
             SideInit::A(t) => {
                 let sec = &self.level.sectors[sector as usize];
-                match t.special {
-                    209 /*Tranfer_Heights */ => {
+                let match_special = num::FromPrimitive::from_i16(t.special);
+                match match_special {
+                    Some(ActionSpecials::TransferHeights) => {
                         if sector != -1 {
                             Self::set_texture_side_blend(&self, side, Sides::Bottom.bits() as usize, &mut sec.borrow_mut().bottom_map, &imsd.bottom_texture);
                             Self::set_texture_side_blend(&self, side, Sides::Mid.bits() as usize, &mut sec.borrow_mut().mid_map, &imsd.middle_texture);
@@ -467,7 +665,7 @@ impl MapLoader<'_, '_> {
                         }
                     }
 
-                    190 /*Static_INIT*/ => {
+                    Some(ActionSpecials::StaticInit) => {
                         let mut color:u32 = u32::from_le_bytes([0,255,255,255]);
                         let mut fog:u32 = 0;
                         let mut color_good: bool = false;
@@ -492,7 +690,7 @@ impl MapLoader<'_, '_> {
                         }
                     }   
 
-                    160 /*Sector_Set3dFloor */ => {
+                    Some(ActionSpecials::SectorSet3dFloor) => {
                         if imsd.top_texture.chars().nth(0).unwrap() == '#' {
                             let mut shortened = imsd.top_texture.clone();
                             shortened.remove(0);
@@ -506,7 +704,7 @@ impl MapLoader<'_, '_> {
                         Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
                         Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
                     }
-                    208 /*Translucent Line */ => {
+                    Some(ActionSpecials::TranslucentLine) => {
                         let mut lump_num = -1;
                         if self.file_system.is_some() {
                             lump_num = self.file_system.as_ref().unwrap().check_num_for_name(&imsd.middle_texture);
@@ -531,7 +729,7 @@ impl MapLoader<'_, '_> {
                         Self::set_texture_side(self,side, Sides::Top.bits() as usize, &imsd.top_texture, missing_textures);
                         Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
                     }
-                    _ => {
+                    None => {
                         Self::set_texture_side(self,side, Sides::Mid.bits() as usize, &imsd.middle_texture, missing_textures);
                         Self::set_texture_side(self,side, Sides::Top.bits() as usize, &imsd.top_texture, missing_textures);
                         Self::set_texture_side(self,side, Sides::Bottom.bits() as usize, &imsd.bottom_texture, missing_textures);
@@ -593,3 +791,102 @@ pub struct SideInitB {
     pub next: u32,
     pub lineside: u8
 }
+
+#[derive(Default)]
+pub struct MapThing {
+    thing_id: i32,
+    pos: Vector3<f64>,
+    angle: i16,
+    skill_filter: u16,
+    class_filter: u16,
+    ed_num: i16,
+    flags: u32,
+    special: i32,
+    args: [i32;5],
+    conversation: i32,
+    gravity: f64,
+    alpha: f64,
+    fill_color: u32,
+    scale: Vector2<f32>,
+    health: f64,
+    score: i32,
+    pitch: i16,
+    roll: i16,
+    render_style: u32,
+    float_bob_phase: i32,
+    friendly_see_blocks: i32,
+    arg_0_str: String,
+    pub info: Option<Rc<DoomEternityEntry>>
+}
+
+#[derive(Default)]
+pub struct DoomEternityEntry {
+    type_: Rc<ClassActor>,
+    special: i16,
+    args_defined: i8,
+    no_skill_flags: bool,
+    args: [i32;5]
+}
+
+/*
+TODO
+*   MapLoader::LoadLevel() {
+*      LoadBehavior();
+*      T_LoadScripts();
+*      Level->Behaviors.LoadDefaultModules();
+*      LoadMapinfoACSLump();
+*      LoadStrifeConversations();
+* 
+*      if (!textmap) {
+*          LoadVertexes(); DONE
+*          LoadLineDefs(); DONE
+*          LoadSideDefs2(); DONE
+*          FinishLoadingLineDefs(); DONE
+*          LoadThings();
+*      }
+*      else {
+*          ParseTextMap();
+*      }
+* 
+*      CalcIndices();
+*      PostProcessLevel();
+* 
+*      LoopSidedefs();
+* 
+*      if (something)  {
+*           LoadExtendedNodes();
+*           if (!NodesLoaded) {
+*                LoadGLNodes();
+*           }
+*      }
+* 
+* 
+*      LoadBlockMap();
+*      LoadReject();
+*      GroupLines();
+*      FloodZones();
+*      SetRenderSector();
+*      FixMiniSegReferences();
+*      FixHoles();
+*      CalcIndices();
+* 
+*      CreateSections();
+* 
+*      SpawnSlopeMakers();
+* 
+*      Spawn3DFloors();
+* 
+*      SpawnThings();
+* 
+*      if (someasd) {
+*           LoadLightMap();
+*      }
+* 
+*      SpawnSpecials();
+*      
+*      otherstuff
+*      
+*      Level->levelMesh = new DoomLevelMesh(*Level);
+* }
+* 
+*/

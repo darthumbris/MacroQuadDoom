@@ -3,10 +3,11 @@ use std::borrow::Borrow;
 use crate::vector::{Vector3, Vector2};
 
 use super::LevelLocals;
-use super::level_elements::{Sector, Side, SubSector, SectorE, SectorIndex};
+use super::level_elements::{Sector, Side, SubSector, SectorE, SectorIndex, Sides};
 use super::level_lightmap::SurfaceType;
-use super::level_texture::TextureID;
+use super::level_texture::{TextureID, TextureManager};
 
+#[derive(Default, Debug)]
 pub struct LevelMesh {
     vertices: Vec<Vector3<f32>>,
     uv_index: Vec<i32>,
@@ -16,6 +17,7 @@ pub struct LevelMesh {
     surfaces: Vec<Surface>
 }
 
+#[derive(Debug)]
 struct Surface {
     type_: SurfaceType,
     type_index: i32,
@@ -26,7 +28,7 @@ struct Surface {
     b_sky: bool
 }
 
-struct Sides {
+struct SidesS {
     v1_bottom: f64,
     v2_bottom: f64,
     v1_top: f64,
@@ -42,7 +44,7 @@ struct SidesBack {
     v2_bottom_back: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SectorPlane {
     normal: Vector3<f64>,
     d: f64,
@@ -81,7 +83,7 @@ impl SectorPlane {
 }
 
 impl LevelMesh {
-    pub fn new(doom_map: &LevelLocals) -> Self {
+    pub fn new(doom_map: &LevelLocals, tex_man: &TextureManager) -> LevelMesh {
         let mut level_mesh = LevelMesh {
             vertices: vec![],
             uv_index: vec![],
@@ -90,7 +92,7 @@ impl LevelMesh {
             surfaces: vec![]
         };
         for i in 0..doom_map.elements.sides.len() {
-            Self::create_side_surfaces(&mut level_mesh, doom_map, &doom_map.elements.sides[i].borrow_mut());
+            Self::create_side_surfaces(&mut level_mesh, doom_map, &doom_map.elements.sides[i].borrow_mut(), tex_man);
         }
         Self::create_subsector_surfaces(&mut level_mesh, doom_map);
 
@@ -189,7 +191,7 @@ impl LevelMesh {
         self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky });
     }
 
-    fn create_side_surfaces(&mut self, doom_map: &LevelLocals, side: &Side) {
+    fn create_side_surfaces(&mut self, doom_map: &LevelLocals, side: &Side, tex_man: &TextureManager) {
         let front_index = side.sector;
         let linedef = &doom_map.lines[side.linedef as usize];
         let back_index = if linedef.borrow_mut().front_sector == front_index {linedef.borrow_mut().back_sector} else {linedef.borrow_mut().front_sector};
@@ -217,11 +219,11 @@ impl LevelMesh {
         let v2_top = front_sector.ceilingplane.z_at_point(&v2);
         let v2_bottom = front_sector.floorplane.z_at_point(&v2);
 
-        let mut sides: Sides = Sides { v1_bottom, v2_bottom, v1_top, v2_top, back: None};
+        let mut sides: SidesS = SidesS { v1_bottom, v2_bottom, v1_top, v2_top, back: None};
 
         let type_index = side.index();
 
-        let dx = Vector2::<f32> {x: v2.x, y: v2.y};
+        // let dx = Vector2::<f32> {x: v2.x, y: v2.y};
 
         if back_index >= 0 {
             let back_sec = &doom_map.elements.sectors[back_index as usize].borrow_mut();
@@ -238,11 +240,11 @@ impl LevelMesh {
                 return
             }
             if v1_bottom < v1_bottom_back || v2_bottom < v2_bottom_back {
-                Self::create_side_surfaces_bottom_seg(self, side, &v1, &v2, type_index, &mut sides);
+                Self::create_side_surfaces_bottom_seg(self, side, &v1, &v2, type_index, &mut sides, tex_man);
             }
             if v1_top > v1_top_back || v2_top > v2_top_back {
                 let b_sky = Self::is_top_side_sky(front_sector, back_sec, side);
-                Self::create_side_surfaces_top_seg(self, side, &v1, &v2, type_index, &mut sides, b_sky);
+                Self::create_side_surfaces_top_seg(self, side, &v1, &v2, type_index, &mut sides, b_sky, tex_man);
             }
         }
         if back_index == -1 {
@@ -297,7 +299,7 @@ impl LevelMesh {
         }
     }
 
-    fn create_side_surfaces_middle_seg(&mut self, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &Sides) {
+    fn create_side_surfaces_middle_seg(&mut self, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &SidesS) {
         
 
         let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
@@ -328,8 +330,8 @@ impl LevelMesh {
         self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false });
 
     }
-    fn create_side_surfaces_top_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides, b_sky: bool) {
-        if b_sky || Self::is_top_side_visible(side) {
+    fn create_side_surfaces_top_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut SidesS, b_sky: bool, tex_man: &TextureManager) {
+        if b_sky || Self::is_top_side_visible(side, tex_man) {
             let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
             verts[0].x = v1.x;
             verts[2].x = v1.x;
@@ -361,8 +363,8 @@ impl LevelMesh {
         sides.v1_top = sides.back.unwrap().v1_top_back;
         sides.v2_top = sides.back.unwrap().v2_top_back;
     }
-    fn create_side_surfaces_bottom_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut Sides) {
-        if Self::is_bottom_side_visible(side) {
+    fn create_side_surfaces_bottom_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut SidesS, tex_man: &TextureManager) {
+        if Self::is_bottom_side_visible(side, tex_man) {
             let mut verts: [Vector3<f32>;4] = [Vector3::<f32>::new(); 4];
             verts[0].x = v1.x;
             verts[2].x = v1.x;
@@ -440,20 +442,19 @@ impl LevelMesh {
         Self::is_sky_sector(front_sector) && Self::is_sky_sector(back_sector)
     }
     
-    fn is_top_side_visible(side: &Side) -> bool {
-        // let tex = 
-        //TODO
-        false
+    fn is_top_side_visible(side: &Side, tex_man: &TextureManager) -> bool {
+        let tex = tex_man.get_game_texture(side.get_texture(Sides::Top.bits() as usize), true);
+        tex.is_some() && tex.unwrap().is_valid()
     }
     
-    fn is_bottom_side_visible(side: &Side) -> bool {
-        //TODO
-        false
+    fn is_bottom_side_visible(side: &Side, tex_man: &TextureManager) -> bool {
+        let tex = tex_man.get_game_texture(side.get_texture(Sides::Bottom.bits() as usize), true);
+        tex.is_some() && tex.unwrap().is_valid()
     }
     
     fn is_sky_sector(sector: &Sector) -> bool {
 
-        //TODO get sky_flat_num from somewehere?
+        //TODO get sky_flat_num from somewehere? is global value in gzdoom
         let temp_sky_num = TextureID{tex_num: 0}; //TODO ^
         sector.get_texture(SectorE::Ceiling as usize) == temp_sky_num
     }
@@ -462,21 +463,23 @@ impl LevelMesh {
 
     
     fn to_plane(p0: &Vector3<f32>, p1: &Vector3<f32>, p2: &Vector3<f32>) -> SectorPlane {
-        // let n: Vector3<f32> = ((p1 - p0) ^ (p2 - p1)) //
-        // ^ is for cross product, | is for dot product
-        //TODO
-        SectorPlane::new()
+        let p1sp0 = p1.sub(p0);
+        let p2sp1 = p2.sub(p1);
+        let cross = p1sp0.cross(&p2sp1);
+        let n = cross.unit();
+        let d = p0.dot(&n);
+        let mut p = SectorPlane::new();
+        p.set(n.x as f64, n.y as f64, n.z as f64, d as f64);
+        p
     }
 
-    fn to_f32_vector2(v: &Vector2<f64>) -> Vector2<f32> {/*TODO */
-        Vector2::<f32>::new()
+    fn to_f32_vector2(v: &Vector2<f64>) -> Vector2<f32> {
+        Vector2::<f32>::new_params(v.x as f32, v.y as f32)
     }
     
-    fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {/*TODO */
-        Vector3::<f32>::new()
+    fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {
+        Vector3::<f32>::new_params(v.x as f32, v.y as f32, v.z as f32)
     }
-    
-    fn to_f32_vector4() {/*TODO */}
 
     //to check if the triangle is degenerate (zero cross product for two sides)
     fn is_degenerate(v0: &Vector3<f32>, v1: &Vector3<f32>, v2: &Vector3<f32>) -> bool {

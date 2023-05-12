@@ -6,6 +6,7 @@ pub struct PortalCoverage {
     subsector_count: i32
 }
 
+#[derive(Default)]
 pub struct PortalInfo {
     displacements: DisplacementTable,
     portal_block_map: PortalBlockMap,
@@ -14,6 +15,7 @@ pub struct PortalInfo {
     line_portal_spans: Vec<LinePortalSpan>,
 }
 
+#[derive(Default)]
 struct PortalBlockMap {}
 
 pub struct LinePortal {}
@@ -23,8 +25,10 @@ pub struct SectorPortalGroup {}
 
 struct LinePortalSpan {}
 
+#[derive(Default)]
 pub struct PortalBits {}
 
+#[derive(Default)]
 struct DisplacementTable {}
 
 pub struct SectorPortal {}

@@ -93,25 +93,25 @@ pub struct WADLevelLinedef
   pub back_sidedef: u16
 }
 
-struct WADLevelHexenThing {
-    thing_id: i16,
-    z: i16,
-    action_special: u8,
-    arg1: u8,
-    arg2: u8,
-    arg3: u8,
-    arg4: u8,
-    arg5: u8
+pub struct WADLevelHexenThing {
+    pub thing_id: i16,
+    pub z: i16,
+    pub action_special: u8,
+    pub arg1: u8,
+    pub arg2: u8,
+    pub arg3: u8,
+    pub arg4: u8,
+    pub arg5: u8
 }
 
 pub struct WADLevelThing
 {
-  x: i16,
-  y: i16,
-  angle: i16,
-  type_: i16,
-  options: i16,
-  hex: Option<WADLevelHexenThing>
+  pub x: i16,
+  pub y: i16,
+  pub angle: i16,
+  pub type_: i16,
+  pub options: i16,
+  pub hex: Option<WADLevelHexenThing>
 }
 
 pub struct WADLevelNode {

@@ -82,6 +82,10 @@ impl Line {
     pub fn adjust_line(&self) {
 
     }
+
+    pub fn index(&self) -> i32 {
+        self.line_num
+    }
 }
 
 #[derive(Clone)]
@@ -92,7 +96,7 @@ pub struct Side {
     pub linedef: LineDefIndex, //is geen option
     left_side: u32,
     right_side: u32,
-    texel_length: u16,
+    pub texel_length: u16,
     light: i16,
     tier_lights: [i16;3],
     pub flags: u16,
@@ -157,9 +161,13 @@ impl Side {
     pub fn set_texture(&mut self, which: usize, tex: TextureID) {
         self.textures[which].texture = tex;
     }
+
+    pub fn get_texture(&self, which: usize) -> TextureID {
+        self.textures[which].texture
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Vertex {
     p: Vector2<f64>,
 
@@ -335,6 +343,7 @@ bitflags! {
         const ClipMidTex = 0x00080000;
         const WrapMidTex = 0x00100000;
         const CheckSwitchRange = 0x00400000;
+        const AddTrans = 0x00000400;	// additive translucency (can only be set internally)
     }
 
     pub struct Sides: u32 {
@@ -517,6 +526,7 @@ struct LinkedSector {
     type_: i32
 }
 
+#[derive(Default)]
 pub struct LevelElements {
     pub vertexes: Vec<Rc<RefCell<Vertex>>>,
     pub sectors: Vec<Rc<RefCell<Sector>>>,
@@ -531,7 +541,7 @@ pub struct LevelElements {
     pub nodes: Vec<Node>,
     game_subsectors: Vec<SubSector>,
     game_nodes: Vec<Node>,
-    head_game_node: Box<Node>,
+    head_game_node: Rc<Node>,
     reject_matrix: Vec<u8>,
     z_zones: Vec<Zone>,
     poly_objects: Vec<PolyObj>,
@@ -541,6 +551,7 @@ pub struct LevelElements {
 
 struct Zone {}
 
+#[derive(Default)]
 pub struct Node {}
 
 #[derive(Clone, Copy)]
@@ -573,6 +584,7 @@ pub struct SecNode{
     visited: bool
 }
 
+#[derive(Default)]
 pub struct SectorMarker {}
 
 pub struct UDMFKeys {}
