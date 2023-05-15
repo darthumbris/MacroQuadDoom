@@ -42,11 +42,11 @@ pub struct WADLevelSubSector {
 }
 
 pub struct WADLevelSeg {
-    start: u16,
-    end: u16,
+    start: u16, //starting vertex
+    end: u16, //ending vertex
     angle: i16,
-    linedef: u16,
-    direction: i16,
+    linedef: u16, //index of the linedef
+    direction: i16, //0: same as linedef, 1: opposite of linedef
     offset: i16
 }
 

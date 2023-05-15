@@ -1,5 +1,9 @@
 use std::borrow::Borrow;
 
+use macroquad::models::Vertex;
+use macroquad::prelude::{Mesh, Vec3, Vec2, Color};
+use macroquad::texture::Texture2D;
+
 use crate::vector::{Vector3, Vector2};
 
 use super::LevelLocals;
@@ -9,8 +13,8 @@ use super::level_texture::{TextureID, TextureManager};
 
 #[derive(Default, Debug)]
 pub struct LevelMesh {
-    vertices: Vec<Vector3<f32>>,
-    uv_index: Vec<i32>,
+    pub vertices: Vec<Vector3<f32>>,
+    pub uv_index: Vec<i32>,
     elements: Vec<u32>,
     mesh_surfaces: Vec<i32>,
 
@@ -60,6 +64,8 @@ impl SectorPlane {
     }
     
     pub fn z_at_point(&self, point: &Vector2<f32>) -> f64{
+        // println!("z_at_point: {:?}", point);
+        // println!("z_at_point: {}", (self.d + self.normal.x * f64::from(point.x) + self.normal.y * f64::from(point.y)) * self.neg_ic);
         (self.d + self.normal.x * f64::from(point.x) + self.normal.y * f64::from(point.y)) * self.neg_ic
     }
     
@@ -79,6 +85,7 @@ impl SectorPlane {
         self.normal.z = cc;
         self.d = dd;
         self.neg_ic = -1. / cc;
+        // println!("set sectorplane: normal: {:?}, d: {}, neg: {}", self.normal, self.d, self.neg_ic);
     }
 }
 
@@ -100,10 +107,28 @@ impl LevelMesh {
         level_mesh
     }
 
+    pub fn to_macro_mesh(&self, texture: Texture2D) -> Mesh {
+        let mut vertices: Vec<Vertex> = vec![];
+        let mut indices: Vec<u16> = vec![];
+
+        for i in 0..self.vertices.len() {
+            let vertex = self.vertices[i];
+            // let uv_index = self.uv_index[i];
+            let position: Vec3 = Vec3 { x: vertex.x, y: vertex.y, z: vertex.z};
+            let uv: Vec2 = Vec2 { x: 0., y: 0. }; //TODO calc the uvs
+            let color: Color = Color { r: 25., g: 45., b: 75., a: 1. };
+            let vertex_macro: Vertex = Vertex { position, uv, color };
+            indices.push(self.uv_index[i] as u16);
+            vertices.push(vertex_macro);
+        }
+
+        Mesh { vertices, indices, texture: Some(texture) }
+    }
+
     //Functions for creating the mesh
     fn create_subsector_surfaces(&mut self, doom_map: &LevelLocals) {
         for i in 0..doom_map.elements.subsectors.len() {
-            let sub = &doom_map.elements.subsectors[i];
+            let sub = &doom_map.elements.subsectors[i].borrow_mut();
 
             if sub.line_count < 3 {continue;}
 
@@ -144,8 +169,9 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &doom_map.elements.segs[sub.first_line[i] as usize];
-            let v1 = Self::to_f32_vector2(&seg.v1.f_pos());
+            let seg = &doom_map.elements.segs[sub.first_line[i] as usize].borrow_mut();
+            let v1_seg = doom_map.vertexes[seg.v1 as usize].borrow_mut();
+            let v1 = Self::to_f32_vector2(&v1_seg.f_pos());
 
             verts[i + start_vert_index as usize].x = v1.x;
             verts[i + start_vert_index as usize].y = v1.y;
@@ -177,8 +203,9 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &doom_map.elements.segs[sub.first_line[vert_count as usize - 1 - i] as usize];
-            let v1 = Self::to_f32_vector2(&seg.v1.f_pos());
+            let seg = &doom_map.elements.segs[sub.first_line[vert_count as usize - 1 - i] as usize].borrow_mut();
+            let v1_seg = doom_map.vertexes[seg.v1 as usize].borrow_mut();
+            let v1 = Self::to_f32_vector2(&v1_seg.f_pos());
 
             verts[i + start_vert_index as usize].x = v1.x;
             verts[i + start_vert_index as usize].y = v1.y;
@@ -193,14 +220,11 @@ impl LevelMesh {
 
     fn create_side_surfaces(&mut self, doom_map: &LevelLocals, side: &Side, tex_man: &TextureManager) {
         let front_index = side.sector;
-        let linedef = &doom_map.lines[side.linedef as usize];
-        let back_index = if linedef.borrow_mut().front_sector == front_index {linedef.borrow_mut().back_sector} else {linedef.borrow_mut().front_sector};
+        let linedef = &doom_map.lines[side.linedef as usize].borrow_mut();
+        let back_index = if linedef.front_sector == front_index {linedef.back_sector} else {linedef.front_sector};
+        if Self::is_control_sector(front_index) { return }
 
-        if Self::is_control_sector(front_index) {
-            return
-        }
-
-        let line = doom_map.lines[side.linedef as usize].borrow_mut();
+        let line = linedef;
         let v1;
         let v2;
         if line.sidedef[0] >= 0 {
@@ -469,6 +493,8 @@ impl LevelMesh {
         let n = cross.unit();
         let d = p0.dot(&n);
         let mut p = SectorPlane::new();
+        // println!("to plane");
+        // println!("p1sp0: {:?}, p2sp1: {:?}, cross: {:?}, n: {:?}, d: {:?}", p1sp0, p2sp1, cross, n, d);
         p.set(n.x as f64, n.y as f64, n.z as f64, d as f64);
         p
     }

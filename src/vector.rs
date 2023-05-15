@@ -1,3 +1,5 @@
+use std::{f32::consts::PI as pi32, f64::consts::PI as pi64};
+
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Vector2<T> {
@@ -12,9 +14,65 @@ pub struct Vector3<T> {
     pub z: T
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct Angle<T> {
     degrees: T
+}
+
+impl Angle<f64> {
+    pub fn from_degrees(degrees: f64) -> Angle<f64> {
+        Angle { degrees }
+    }
+
+    pub fn from_radians(radians: f64) -> Angle<f64> {
+        Angle { degrees: radians * 180.0 / pi64 }
+    }
+
+    pub fn add(&mut self, angle: &Angle<f64>) {
+        self.degrees += angle.degrees;
+    }
+
+    pub fn subtract(&mut self, angle: &Angle<f64>) {
+        self.degrees -= angle.degrees;
+    }
+
+    pub fn subtract_result(&self, angle: &Angle<f64>) -> Angle<f64> {
+        Angle { degrees: self.degrees - angle.degrees }
+    }
+
+    //What the fuck
+    pub fn normalized360(&self) -> Angle<f64> {
+        let temp = ((((0x40000000 as f64 / 90.) * self.degrees).floor() + 0.5) as i32) as u32;
+        Angle { degrees: (90. / 0x40000000 as f64) * (temp as i32) as f64 }
+    }
+}
+
+impl Angle<f32> {
+    pub fn from_degrees(degrees: f32) -> Angle<f32> {
+        Angle { degrees }
+    }
+
+    pub fn from_radians(radians: f32) -> Angle<f32> {
+        Angle { degrees: radians * 180.0 / pi32 }
+    }
+
+    pub fn add(&mut self, angle: &Angle<f32>) {
+        self.degrees += angle.degrees;
+    }
+
+    pub fn subtract(&mut self, angle: &Angle<f32>) {
+        self.degrees -= angle.degrees;
+    }
+
+    pub fn subtract_result(&self, angle: &Angle<f32>) -> Angle<f32> {
+        Angle { degrees: self.degrees - angle.degrees }
+    }
+
+    //What the fuck
+    pub fn normalized360(&self) -> Angle<f32> {
+        let temp = ((((0x40000000 as f32 / 90.) * self.degrees).floor() + 0.5) as i32) as u32;
+        Angle { degrees: (90. / 0x40000000 as f32) * (temp as i32) as f32 }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -51,6 +109,10 @@ impl Vector2<f32> {
     pub fn is_zero(&self) -> bool {
         self.x == 0. && self.y == 0.
     }
+
+    pub fn angle(&self) -> Angle<f32> {
+        Angle::<f32>::from_radians(self.y.atan2(self.x))
+    }
 }
 
 impl Vector2<f64> {
@@ -65,6 +127,10 @@ impl Vector2<f64> {
 
     pub fn is_zero(&self) -> bool {
         self.x == 0. && self.y == 0.
+    }
+
+    pub fn angle(&self) -> Angle<f64> {
+        Angle::<f64>::from_radians(self.y.atan2(self.x))
     }
 }
 

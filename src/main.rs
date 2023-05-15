@@ -84,8 +84,12 @@ async fn main() {
     println!("Made MapLoader");
     maploader.load_level(&mut wad.levels[0], &game);
     println!("Loaded level");
-    println!("levelmesh: {:?}", level.level_mesh);
+    // println!("levelmesh: vertexes len: {}, indices: {:?}", level.level_mesh.vertices.len(), level.level_mesh.uv_index);
+    // println!("levelmesh: vertexes: {:?}", level.level_mesh.vertices);
     println!("level: {}", level_layer);
+
+    // let mesh: Mesh = Mesh { vertices: level.level_mesh.vertices, indices: level.level_mesh.uv_index, texture: None };
+    let mesh: Mesh = level.level_mesh.to_macro_mesh(wall);
     loop {
         let delta = get_frame_time();
         clear_background(LIGHTGRAY);
@@ -122,7 +126,7 @@ async fn main() {
         
         movement(delta, &mut player);
         // println!("level: {}", level);
-        render(wall, & player, &wad.levels[level_layer as usize].vertexes, &wad.levels[level_layer as usize].linedefs, MapTransform{height, x_pos, scale});
+        render(wall, & player, &wad.levels[level_layer as usize].vertexes, &wad.levels[level_layer as usize].linedefs, MapTransform{height, x_pos, scale}, &mesh);
 
         next_frame().await
     }

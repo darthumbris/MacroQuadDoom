@@ -29,7 +29,7 @@ pub struct SubSector {
     pub first_line: Vec<SegIndex>,
     render_sector: SectorIndex,
     section: Box<Section>,
-    subsector_num: i32,
+    pub subsector_num: i32,
     pub line_count: u32,
     flags : u16,
     map_section: i16,
@@ -69,7 +69,7 @@ pub struct Line {
     auto_map_style: AutoMapLineStyle,
     health: i32,
     health_group: i32,
-    line_num: i32,
+    pub line_num: i32,
 
     //TODO functions
 }
@@ -80,11 +80,16 @@ impl Line {
     }
 
     pub fn adjust_line(&self) {
-
+        println!("adjusting line TODO");
+        //TODO
     }
 
     pub fn index(&self) -> i32 {
         self.line_num
+    }
+
+    pub fn delta(&self) -> Vector2<f64> {
+        self.delta
     }
 }
 
@@ -94,8 +99,8 @@ pub struct Side {
     attached_decals: Option<BaseDecal>,
     textures: [Part;3],
     pub linedef: LineDefIndex, //is geen option
-    left_side: u32,
-    right_side: u32,
+    pub left_side: u32,
+    pub right_side: u32,
     pub texel_length: u16,
     light: i16,
     tier_lights: [i16;3],
@@ -105,7 +110,7 @@ pub struct Side {
     lightmap: Option<LightMapSurface>,
     segs: Vec<SegIndex>, //all segs in ascending order
     num_segs: i32,
-    side_num: i32,
+    pub side_num: i32,
 
     //TODO functions, Part and BaseDecal struct
 }
@@ -115,28 +120,6 @@ impl Side {
         Side { sector: -1, attached_decals: None, textures: [Part::new(); 3], linedef: 0, left_side: 0, right_side: 0, texel_length: 0, light: 0, tier_lights: [0;3], 
             flags: 0, udmf_index: 0, light_head: None, lightmap: None, segs: vec![], num_segs: -1, side_num: 0 }
     }
-
-    // pub fn v1<'b>(& self, level: &'b LevelLocals) -> &'b Vertex {
-    //     let line = level.lines[self.linedef as usize];
-    //     let v1 = line.borrow_mut().v1.borrow();
-    //     let v2 = line.borrow_mut().v2.borrow();
-    //     if line.borrow_mut().sidedef[0] >= 0 {
-    //         return v1
-    //     }
-    //     else {
-    //         return v2
-    //     }
-    // }
-
-    // pub fn v2<'b>(& self, level: &'b LevelLocals) -> &'b Vertex {
-    //     let linedef = &level.lines[self.linedef as usize].borrow_mut();
-    //     if linedef.sidedef[0] >= 0 {
-    //         return &linedef.v2.borrow()
-    //     }
-    //     else {
-    //         return &linedef.v1.borrow()
-    //     }
-    // }
 
     pub fn index(&self) -> i32{
         self.side_num
@@ -171,7 +154,7 @@ impl Side {
 pub struct Vertex {
     p: Vector2<f64>,
 
-    vertex_num: i32,
+    pub vertex_num: i32,
     view_angle: u32, //u32 angle_t
     angle_time: i32,
     dirty: bool,
@@ -355,7 +338,8 @@ bitflags! {
 
 impl Sector {
     pub fn new(e: ExtSectorIndex) -> Sector {
-        Sector {e, floorplane: SectorPlane::new(), ceilingplane: SectorPlane::new(), splane: [Splane::new();2], level: None, center_spot: Vector2::<f64>::new(), lines: vec![], height_sec: -1, sector_portal_thinglist: SecNode::default(), touching_render_things: SecNode::default(), special_colors: [PalEntry::new(); 5], additive_colors: [PalEntry::new(); 5], color_map: ColorMap::new(), special: 0, sky: 0, valid_count: 0, bottom_map: 0, mid_map: 0, top_map: 0, trans_door: false, light_level: 0, more_flags: 0, flags: 0, portals: [0;2], portal_group: 0, sector_num: 0, subsector_count: 0, reflect: [0.;2], trans_door_height: 0., subsectors: vec![], portals_fc: [SectorPortalGroup::default(); 2], vbo_index: [0;4], ibo_index: [0;4], vbo_height: [[0.;2];2], vbo_count: [0;2], ibo_count: 0, has_light_map: false, thing_list: vec![], gravity: 0., touching_thing_list: vec![], friction: 0., move_factor: 0., terrain_num: [0;2], sec_name: String::new(), sec_type: 0, sound_traversed: 0, stair_lock: 0, prev_sec: 0, next_sec: 0, damage_type: String::new(), damage_amount: 0, damage_interval: 0, leaky_damage: 0, zone_number: 0, health_floor: 0, health_ceiling: 0, health_3d: 0, health_floor_group: 0, health_ceiling_group: 0, health_3d_group: 0 }
+        Sector {e, floorplane: SectorPlane::new(), ceilingplane: SectorPlane::new(), splane: [Splane::new();2], level: None, center_spot: Vector2::<f64>::new(), lines: vec![], height_sec: -1, special_colors: [PalEntry::new(); 5], additive_colors: [PalEntry::new(); 5], color_map: ColorMap::new(), special: 0, sky: 0, valid_count: 0, bottom_map: 0, mid_map: 0, top_map: 0, trans_door: false, light_level: 0, more_flags: 0, flags: 0, portals: [0;2], portal_group: 0, sector_num: 0, subsector_count: 0, reflect: [0.;2], trans_door_height: 0., subsectors: vec![], portals_fc: [SectorPortalGroup::default(); 2], vbo_index: [0;4], ibo_index: [0;4], vbo_height: [[0.;2];2], vbo_count: [0;2], ibo_count: 0, has_light_map: false, thing_list: vec![], gravity: 0., touching_thing_list: vec![], friction: 0., move_factor: 0., terrain_num: [0;2], sec_name: String::new(), sec_type: 0, sound_traversed: 0, stair_lock: 0, prev_sec: 0, next_sec: 0, damage_type: String::new(), damage_amount: 0, damage_interval: 0, leaky_damage: 0, zone_number: 0, health_floor: 0, health_ceiling: 0, health_3d: 0, health_floor_group: 0, health_ceiling_group: 0, health_3d_group: 0, sector_portal_thinglist: SecNode::default(), touching_render_things: SecNode::default() }
+        // Sector {e, floorplane: SectorPlane::new(), ceilingplane: SectorPlane::new(), splane: [Splane::new();2], level: None, height_sec: -1, sector_portal_thinglist: SecNode::default(), touching_render_things: SecNode::default(), color_map: ColorMap::new(), special: 0, bottom_map: 0, mid_map: 0, top_map: 0, light_level: 0, more_flags: 0, flags: 0, sector_num: 0, ibo_count: 0, thing_list: vec![], gravity: 0., friction: 0., move_factor: 0., terrain_num: [0;2], sec_name: String::new(), sec_type: 0, prev_sec: 0, next_sec: 0, zone_number: 0, health_floor: 0, health_ceiling: 0, health_3d: 0, health_floor_group: 0, health_ceiling_group: 0, health_3d_group: 0 }
     }
     
     pub fn get_texture(&self, pos: usize) -> TextureID {
@@ -363,6 +347,7 @@ impl Sector {
     }
 
     pub fn set_plane_tex_z(&mut self, pos: usize, val: f64, dirtify: Option<bool>) {
+        println!("setting plane_ tex_z: {}", val);
         self.splane[pos].tex_z = val;
         if dirtify.unwrap_or(false) { Self::set_all_vertices_dirty(self);}
         Self::check_overlap(self)
@@ -404,6 +389,7 @@ impl Sector {
     }
 
     pub fn get_plane_tex_z(&self, pos: usize) -> f64 {
+        // println!("get_plane_tex_z: {}", self.splane[pos].tex_z);
         self.splane[pos].tex_z
     }
 
@@ -420,7 +406,7 @@ impl Sector {
     }
 
     pub fn set_texture(&mut self, pos: usize, texure: TextureID) {
-
+        //TODO
     }
 }
 
@@ -434,16 +420,16 @@ pub enum SectorE {
 }
 
 pub struct Seg {
-    pub v1: Box<Vertex>,
-    pub v2: Box<Vertex>,
-    sidedef: Box<Side>,
-    linedef: Box<Line>,
+    pub v1: VertexIndex,
+    pub v2: VertexIndex,
+    sidedef: SideDefIndex,
+    linedef: LineDefIndex,
 
     front_sector: SectorIndex,
     back_sector: SectorIndex,
 
     side_frac: f32,
-    seg_num: i32,
+    pub seg_num: i32,
 }
 
 #[derive(Clone)]
@@ -536,9 +522,9 @@ pub struct LevelElements {
     pub lines: Vec<Rc<RefCell<Line>>>, //TODO this maybe the correct one
     pub sides: Vec<Rc<RefCell<Side>>>,
     seg_buffer: Vec<Box<Seg>>,
-    pub segs: Vec<Seg>,
-    pub subsectors: Vec<SubSector>,
-    pub nodes: Vec<Node>,
+    pub segs: Vec<Rc<RefCell<Seg>>>,
+    pub subsectors: Vec<Rc<RefCell<SubSector>>>,
+    pub nodes: Vec<Rc<RefCell<Node>>>,
     game_subsectors: Vec<SubSector>,
     game_nodes: Vec<Node>,
     head_game_node: Rc<Node>,
@@ -552,7 +538,24 @@ pub struct LevelElements {
 struct Zone {}
 
 #[derive(Default)]
-pub struct Node {}
+pub struct Node {
+    x: i32,
+    y: i32,
+    dx: i32,
+    dy: i32,
+
+    len: f32,
+
+    //union / enum
+    //bbox[2][4]
+    //nb_bbox[2][4]
+    
+
+    //union enum
+    //void* children[2]
+    //int children[2]
+    pub node_num: i32
+}
 
 #[derive(Clone, Copy)]
 pub struct Splane {
@@ -577,10 +580,10 @@ impl Splane {
 pub struct SecNode{
     sector: Option<Box<Sector>>,
     thing: Actor,
-    thing_prev: Box<SecNode>,
-    thing_next: Box<SecNode>,
-    sec_prev: Box<SecNode>,
-    sec_next: Box<SecNode>,
+    thing_prev: Option<Box<SecNode>>,
+    thing_next: Option<Box<SecNode>>,
+    sec_prev: Option<Box<SecNode>>,
+    sec_next: Option<Box<SecNode>>,
     visited: bool
 }
 

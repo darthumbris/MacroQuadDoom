@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use crate::behavior::parse_level::WADLevelLinedef;
 use crate::game::{Game, GameType};
 use crate::parser::parse_level::WADLevel;
-use crate::vector::{Vector3, Vector2};
+use crate::vector::{Vector3, Vector2, Angle};
 
 use super::level_actor::ClassActor;
 use super::level_mesh::LevelMesh;
@@ -67,7 +67,7 @@ impl MapLoader<'_, '_> {
             Self::load_sidedefs(self, map, &mut missing_textures);
             println!("finished loading sides");
             Self::finish_loading_linedefs(self);
-            println!("finished loading sides");
+            println!("finished doing finish_loading_linedefs");
             println!("going to load things");
             if !map.has_behavior {Self::load_things(self, map, game)}
             else {Self::load_things2(self, map, game)}
@@ -76,12 +76,19 @@ impl MapLoader<'_, '_> {
         else {
             //TODO parse textmap
         }
+        Self::calc_indices(self);
+        println!("finished calculating indices");
+        println!("going to loop the sidedefs");
+        Self::loop_side_defs(self, true);
+        println!("finished looping sidedefs");
 
         /* TODO
-         * CalcIndices();
          * PostProcessLevel();
          * LoopSidedefs();
          * 
+         * loadsubsectors();
+         * loadnodes();
+         * loadsegs();
          * 
          * LoadBlockMap();
          * LoadReject();
@@ -117,13 +124,9 @@ impl MapLoader<'_, '_> {
         let def_sec_type;
     
         if (self.level.flags & LevelFlags::SndSeqTotalCtrl.bits()) != 0 { def_sec_type = 0; } else {def_sec_type = 1;}
-        println!("going to load: {} sectors", map.sectors.len());
         for i in 0..map.sectors.len() {
-            println!("going to load sector: {}", i);
             self.level.extsectors.push(ExtSector::new());
-            println!("made a new extsector: {}", i);
             let mut sector = Sector::new(i as i32);
-            println!("made a new sector: {}", i);
             let ms = &mut map.sectors[i];
             if map.has_behavior {
                 sector.flags |= SectorFlags::FloorDrop.bits();
@@ -175,22 +178,21 @@ impl MapLoader<'_, '_> {
             sector.move_factor = 2048./65536.;
             sector.sector_num = i as i32;
             sector.ibo_count = -1;
-            println!("going to push sector: {}", i);
             self.level.sectors.push(Rc::new(RefCell::new(sector)));
-            println!("pushed sector: {}", i);
         }
     }
 
 
     fn load_linedefs(&mut self, map: &mut WADLevel) {
 
-        let mut line_count = map.linedefs.len();
-        let mut side_count = map.sidedefs.len();
-        self.line_map.resize(line_count, 0);
+        let mut line_amount = map.linedefs.len();
+        let side_amount = map.sidedefs.len();
+        self.line_map.resize(line_amount, 0);
         let mut skipped = 0;
         let mut i = 0;
+        self.side_count = 0;
     
-        while i < line_count {
+        while i < line_amount {
             let linedef = &map.linedefs[i];
             let v1 = linedef.from;
             let v2 = linedef.to;
@@ -207,19 +209,19 @@ impl MapLoader<'_, '_> {
                 map.linedefs.remove(i);
                 self.force_node_build = true;
                 skipped += 1;
-                line_count -= 1;
+                line_amount -= 1;
             }
             else {
-                side_count += 1;
-                if linedef.back_sidedef != 0xffff /*NO_INDEX */ {side_count += 1;}
+                self.side_count += 1;
+                if linedef.back_sidedef != 0xffff /*NO_INDEX */ {self.side_count += 1;}
                 self.line_map[i] = (i + skipped) as i32;
                 i +=1;
             }
         }
         
-        self.level.lines.reserve(line_count);
-        Self::allocate_sidedefs(self, &map, side_count);
-        for i in 0..line_count {
+        self.level.lines.reserve(line_amount);
+        Self::allocate_sidedefs(self, &map, self.side_count as usize);
+        for i in 0..line_amount {
             let mut linedef = &mut map.linedefs[i];
             let mut line = Line::new();
     
@@ -232,16 +234,18 @@ impl MapLoader<'_, '_> {
             if line.special != 190 /*Static_INIT ? */ && line.args[1] != 254 /*InitEdLine */ && line.args[1] != 253 /*InitEdSector */{
                 let temp = linedef.clone();
                 self.level.tag_manager.add_line_id(i, temp.doom.unwrap().tag);
+                println!("add line id");
             }
             if line.special == 190 /*Static_INIT ? */ && line.args[1] == 254 /*InitEdLine */ {
+                println!("process eternity doom linedef");
                 Self::process_eternity_doom_linedef(self, &line, &linedef);
             }
     
-            if linedef.front_sidedef != 0xffff /*NO_INDEX */ && (linedef.front_sidedef as usize) >= side_count {
+            if linedef.front_sidedef != 0xffff /*NO_INDEX */ && (linedef.front_sidedef as usize) >= side_amount {
                 linedef.front_sidedef = 0; //dummy sidedef
                 println!("Linedef {} has a bad sidedef", i);
             }
-            if linedef.back_sidedef != 0xffff /*NO_INDEX */ && (linedef.back_sidedef as usize) >= side_count {
+            if linedef.back_sidedef != 0xffff /*NO_INDEX */ && (linedef.back_sidedef as usize) >= side_amount {
                 linedef.back_sidedef = 0; //dummy sidedef
                 println!("Linedef {} has a bad sidedef", i);
             }
@@ -321,13 +325,131 @@ impl MapLoader<'_, '_> {
 
         }
     }
+
+    //TODO check if it properly goes through everything
+    fn loop_side_defs(&mut self, first_loop: bool) {
+        let mut i: usize = 0;
+        let side_amount = self.level.sides.len();
+
+        self.side_temp.resize(side_amount.max(self.level.vertexes.len()), SideInit::new_b());
+
+        while i < self.level.vertexes.len() {
+            self.side_temp[i] = SideInit::new_b();
+            self.side_temp[i].set_b_first(0xffffffff);
+            self.side_temp[i].set_b_next(0xffffffff);
+            i += 1;
+        }
+        while i < side_amount {
+            match self.side_temp[i] {
+                SideInit::A(_) => {
+                    self.side_temp[i] = SideInit::new_b();
+                    self.side_temp[i].set_b_next(0xffffffff); /*No_Side*/
+                }
+                SideInit::B(mut t) => { t.next = 0xffffffff;/*No_Side*/}
+            }
+            i += 1;
+        }
+        for i in 0..side_amount {
+            // println!("i: {}", i);
+            if matches!(self.side_temp[i], SideInit::B(_)) {
+                let line = self.level.lines[self.level.sides[i].borrow().linedef as usize].borrow();
+                let line_side = line.sidedef[0] != i as i32;
+                let vert = if line_side {line.v2.vertex_num} else {line.v1.vertex_num};
+
+                self.side_temp[i].set_b_line_side(line_side as u8);
+                let new_next = self.side_temp[vert as usize].get_b().unwrap().first;
+                self.side_temp[i].set_b_next(new_next);
+                self.side_temp[vert as usize].set_b_first(i as u32);
+            }
+            else {panic!("error should be SideInitB")}
+            let mut side = self.level.sides[i].borrow_mut();
+            side.left_side = 0xffffffff;/*No_Side*/
+            side.right_side = 0xffffffff;/*No_Side*/
+        }
+        for i in 0..side_amount {
+            // println!("2i: {}", i);
+            let mut right: u32 = u32::max_value();
+            let line = self.level.lines[self.level.sides[i].borrow().linedef as usize].borrow();
+
+            if line.front_sector == line.back_sector {
+                if matches!(self.side_temp[i], SideInit::B(_)) {
+                    let side_temp_i = self.side_temp[i].get_b().unwrap();
+                    let right_side_index = line.sidedef[(!side_temp_i.lineside) as usize];
+                        if right_side_index == -1 {
+                            if first_loop {println!("line {}'s right edge is unconnected", self.line_map[line.line_num as usize])}
+                            continue;
+                        }
+                        let right_side = self.level.sides[right_side_index as usize].borrow();
+                        right = right_side.side_num as u32;
+                }
+                else {panic!("error should be SideInitB")}
+            }
+            else {
+                if matches!(self.side_temp[i], SideInit::B(_)) {
+                    let side_temp_i = self.side_temp[i].get_b().unwrap();
+
+                    if side_temp_i.lineside != 0 {right = line.v1.vertex_num as u32}
+                    else {right = line.v2.vertex_num as u32}
+                    let mut side_temp_right = self.side_temp[right as usize].get_b().unwrap();
+
+                    right = side_temp_right.first;
+                    if right == 0xffffffff /*No_Side*/ {
+                        if first_loop {println!("line {}'s right edge is unconnected", self.line_map[line.line_num as usize])}
+                        continue;
+                    }
+
+                    if side_temp_right.next != 0xffffffff /*No_Side*/ {
+                        let mut best_right = right;
+                        let mut best_angle = Angle::<f64>::from_degrees(360.);
+
+                        let left_l_index = self.level.sides[i].borrow().linedef;
+                        let left_line = self.level.lines[left_l_index as usize].borrow();
+                        let mut right_line;
+                        let mut angle_1: Angle<f64> = left_line.delta().angle();
+                        let mut angle_2: Angle<f64>;
+                        let mut angle: Angle<f64>;
+
+                        if side_temp_i.lineside == 0 { angle_1.add(&Angle::<f64>::from_degrees(180.))}
+                        while right != 0xffffffff {
+                            side_temp_right = self.side_temp[right as usize].get_b().unwrap();
+                            let side = self.level.sides[right as usize].borrow();
+                            if side.left_side == 0xffffffff /*No_Side*/ {
+                                let right_l_index = side.linedef;
+                                right_line = self.level.lines[right_l_index as usize].borrow();
+                                if right_line.front_sector != right_line.back_sector {
+                                    angle_2 = right_line.delta().angle();
+                                    if side_temp_right.lineside != 0 {
+                                        angle_2.add(&Angle::<f64>::from_degrees(180.));
+                                    }
+                                    angle = angle_2.subtract_result(&angle_1).normalized360();
+
+                                    if angle != Angle::<f64>::from_degrees(0.) && angle <= best_angle {
+                                        best_right = right;
+                                        best_angle = angle;
+                                    }
+                                }
+                            }
+                            right = side_temp_right.next;
+                        }
+                        right = best_right;
+                    }
+                }
+                else {panic!("error should be SideInitB")}
+            }
+            // println!("right: {}, side_amount: {}", right, side_amount);
+            assert!(i < side_amount);
+            assert!(right < side_amount as u32);
+            self.level.sides[i].borrow_mut().right_side = right;
+            self.level.sides[i].borrow_mut().left_side = i as u32;
+        }
+    }
     
     fn finish_loading_linedefs(&mut self) {
         for i in 0..self.level.lines.len() {
             let mut index = self.level.lines[i].borrow().sidedef[0] as usize;
-            if self.level.lines[i].borrow().sidedef[0] == -1 {index = 0}
-            println!("trying to acces: {} and len is: {}", index, self.side_temp.len());
-            println!("sidedef[0]: {}, i: {}", self.level.lines[i].borrow().sidedef[0], i);
+            if self.level.lines[i].borrow().sidedef[0] == -1 {index = 0} //TODO check this
+            // println!("trying to acces: {} and len is: {}", index, self.side_temp.len());
+            // println!("sidedef[0]: {}, i: {}", self.level.lines[i].borrow().sidedef[0], i);
             match self.side_temp[index] {
                 SideInit::A(t) => { Self::finish_loading_linedef(self, i, t.alpha)}
                 SideInit::B(_) => {}
@@ -340,8 +462,14 @@ impl MapLoader<'_, '_> {
         let mut alpha = alpha;
         let mut additive = false;
 
-        if line.sidedef[0] != -1 {line.front_sector = line.sidedef[0]} else {line.front_sector = -1}
-        if line.sidedef[1] != -1 {line.back_sector = line.sidedef[1]} else {line.back_sector = -1}
+        if line.sidedef[0] != -1 {
+            let side = self.level.sides[line.sidedef[0] as usize].borrow();
+            line.front_sector = side.sector;
+        } else {line.front_sector = -1}
+        if line.sidedef[1] != -1 {
+            let side = self.level.sides[line.sidedef[1] as usize].borrow();
+            line.back_sector = side.sector;
+        } else {line.back_sector = -1}
         
         let dx: f64 = line.v2.fx() - line.v1.fx();
         let dy: f64 = line.v2.fy() - line.v1.fy();
@@ -454,6 +582,32 @@ impl MapLoader<'_, '_> {
         }
     }
 
+    fn calc_indices(&self) {
+        for i in 0..self.level.vertexes.len() {
+            self.level.vertexes[i].borrow_mut().vertex_num = i as i32;
+        }
+
+        for i in 0..self.level.lines.len() {
+            self.level.lines[i].borrow_mut().line_num = i as i32;
+        }
+
+        for i in 0..self.level.sides.len() {
+            self.level.sides[i].borrow_mut().side_num = i as i32;
+        }
+
+        for i in 0..self.level.segs.len() {
+            self.level.segs[i].borrow_mut().seg_num = i as i32;
+        }
+
+        for i in 0..self.level.subsectors.len() {
+            self.level.subsectors[i].borrow_mut().subsector_num = i as i32;
+        }
+
+        for i in 0..self.level.nodes.len() {
+            self.level.nodes[i].borrow_mut().node_num = i as i32;
+        }
+    }
+
     fn process_eternity_map_thing(&self) {
         //TODO
     }
@@ -463,16 +617,17 @@ impl MapLoader<'_, '_> {
         //TODO
     }
 
-    fn set_side_num(&self, sidedef: &mut SideDefIndex, side_count: u16) {
-        if side_count == 0xffff /*NO_INDEX */ {*sidedef = -1;}
-        else if (side_count as usize) < self.level.elements.sides.len() {
-            *sidedef = side_count as i32;
-            match self.side_temp[side_count as usize] {
-                SideInit::A(mut t) => {t.map = side_count as u32}
+    fn set_side_num(&mut self, sidedef: &mut SideDefIndex, side_num: u16) {
+        if side_num == 0xffff /*NO_INDEX */ {*sidedef = -1;}
+        else if self.side_count < self.level.sides.len() as i32 {
+            match self.side_temp[self.side_count as usize] {
+                SideInit::A(mut t) => {t.map = side_num as u32}
                 SideInit::B(_t) => {/*TODO What*/}
             }
+            *sidedef = self.side_count;
+            self.side_count += 1;
         }
-        else {eprintln!("{} sidedefs is not enough", side_count);}
+        else {eprintln!("{} sidedefs is not enough", self.side_count);}
     }
 
     fn save_line_special(&self, line: &Line) {
@@ -498,9 +653,7 @@ impl MapLoader<'_, '_> {
     }
 
     fn allocate_sidedefs(&mut self, map: &WADLevel, count: usize) {
-        self.level.sides.reserve(count);
-        self.level.sides.fill(Rc::new(RefCell::new(Side::new())));
-
+        self.level.sides.resize(count, Rc::new(RefCell::new(Side::new())));
         self.side_temp.resize_with(count.max(self.level.vertexes.len()), || SideInit::new());
 
         for i in 0..count {
@@ -775,6 +928,46 @@ impl SideInit {
     pub fn new() -> SideInit {
         SideInit::A(SideInitA { tag: 0, special: 0, alpha: 0, map: 0 })
     }
+
+    pub fn new_b() -> SideInit {
+        SideInit::B(SideInitB { first: 0, next: 0, lineside: 0 })
+    }
+
+    pub fn get_b(&self) -> Option<SideInitB> {
+        match self {
+            SideInit::A(_) => {return None}
+            SideInit::B(t) => {return Some(t.clone())}
+        }
+    }
+
+    pub fn get_a(&self) -> Option<SideInitA> {
+        match self {
+            SideInit::A(mut t) => {return Some(t.clone())}
+            SideInit::B(_) => {return None}
+        }
+    }
+
+    pub fn set_b_next(&mut self, next: u32) {
+        match self {
+            SideInit::A(_) => {panic!("error should not be A")}
+            SideInit::B(t) => {t.next = next}
+        }
+    }
+
+    pub fn set_b_line_side(&mut self, line_side: u8) {
+        match self {
+            SideInit::A(_) => {panic!("no should not be A")}
+            SideInit::B(t) => {t.lineside = line_side}
+        }
+    }
+
+    pub fn set_b_first(&mut self, first: u32) {
+        match self {
+            SideInit::A(_) => {panic!("no should not be A")}
+            SideInit::B(t) => {t.first = first}
+        }
+    }
+    
 }
 
 #[derive(Clone, Copy)]
@@ -855,6 +1048,11 @@ TODO
 * 
 *      if (something)  {
 *           LoadExtendedNodes();
+            if !textmap {
+                loadsubsectors();
+                loadnodes();
+                loadsegs();
+            }
 *           if (!NodesLoaded) {
 *                LoadGLNodes();
 *           }
