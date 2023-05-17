@@ -7,7 +7,7 @@ use crate::game::{Game, GameType};
 use crate::parser::parse_level::WADLevel;
 use crate::vector::{Vector3, Vector2, Angle};
 
-use super::level_actor::ClassActor;
+use super::level_actor::{ClassActor, BlockNode};
 use super::level_mesh::LevelMesh;
 use super::{LevelLocals, ActionSpecials, SpecialMapThings, MapThingFlags};
 use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides, SubSector, Node, ChildNode, Seg};
@@ -75,8 +75,7 @@ impl MapLoader<'_, '_> {
             println!("finished loading things");
         }
         else {
-            //TODO parse textmap
-            self.load_lightmap(map);
+            self.parse_textmap(map, &missing_textures);
         }
         self.calc_indices();
         println!("finished calculating indices");
@@ -160,7 +159,8 @@ impl MapLoader<'_, '_> {
         reloop |= self.check_nodes(map, build_gl_nodes, (end_time as u32) as i32);
         //TODO level.headgamenode = something
 
-        //TODO loadBlockMap();
+        self.load_blockmap(map);
+        self.load_reject(map);
         //TODO loadreject();
         //TODO grouplines();
         //TODO floodzones();
@@ -1262,6 +1262,42 @@ impl MapLoader<'_, '_> {
         //TODO
         false
     }
+
+    fn parse_textmap(&mut self, _map: &WADLevel, _missing_textures: &MissingTextureTracker) {
+        //TODO
+    }
+
+    fn load_blockmap(&mut self, map: &WADLevel) {
+        let mut count = map.blockmap.blockmap_lump.len();
+        println!("count: {}", count);
+        if self.force_node_build /* || genblockmap? */ || count / 2 >= 0x10000 || count == 0 /*|| checkparams("-blockmap") */  {
+            println!("Generating blockmap");
+            self.create_block_map();
+        }
+        else {
+            if !self.level.block_map.verify_blockmap(count, self.level.lines.len()) {
+                println!("Generating blockmap");
+                self.create_block_map();
+            }
+        }
+        self.level.block_map.blockmap_origin_x = map.blockmap.x as f64;
+        self.level.block_map.blockmap_origin_y = map.blockmap.y as f64;
+        self.level.block_map.blockmap_width = map.blockmap.width as i32;
+        self.level.block_map.blockmap_height = map.blockmap.height as i32;
+
+        count = (self.level.block_map.blockmap_height * self.level.block_map.blockmap_width) as usize;
+        self.level.block_map.block_links = vec![BlockNode::new(); count];
+        self.level.block_map.blockmap = map.blockmap.blockmap_lump.clone();
+    }
+
+    fn create_block_map(&mut self) {
+        //TODO
+    }
+
+    fn load_reject(&mut self, _map: &WADLevel) {
+        //TODO
+    }
+
 }
 
 
