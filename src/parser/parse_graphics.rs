@@ -2,25 +2,25 @@ use crate::parser::*;
 
 pub struct WADPaletteColor
 {
-    r: u8,
-    g: u8,
-    b: u8
+    pub r: u8,
+    pub g: u8,
+    pub b: u8
 }
 
 pub struct WADSprite {
-    width: u32,
-    height: u32,
-    left_offset: u32,
-    top_offset: u32,
-    posts: Vec<WADSpritePost>
+    pub width: u32,
+    pub height: u32,
+    pub left_offset: u32,
+    pub top_offset: u32,
+    pub posts: Vec<WADSpritePost>
 }
 
 pub struct WADSpritePost
 {
-    col: u8,
-    row: u8,
+    pub col: u8,
+    pub row: u8,
     size: u8,
-    pixels: Vec<u8>
+    pub pixels: Vec<u8>
 }
 
 pub fn read_pallete(wad_data: &Vec<u8>, offset: &mut usize, wad_parsed: &mut WADData) {

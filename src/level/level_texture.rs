@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use bitflags::bitflags;
 
-use crate::game::Game;
-
 #[derive(Default)]
 pub struct CanvasTextureInfo {
 
@@ -45,11 +43,11 @@ pub struct FakeColorMap {
 }
 
 pub struct TextureDescriptor {
-    paletted: i32,
-    front_sky_layer: i32,
-    raw_texture: i32,
-    hash_next: i32,
-    flags: u64,
+    _paletted: i32,
+    _front_sky_layer: i32,
+    _raw_texture: i32,
+    _hash_next: i32,
+    _flags: u64,
     texture: GameTexture
 }
 
@@ -76,7 +74,7 @@ impl TextureManager {
     }
 
 
-    pub fn check_for_texture(&self, name: &String, tex_type: TextureType, flag: u32) -> TextureID {
+    pub fn check_for_texture(&self, _name: &String, _tex_type: TextureType, _flag: u32) -> TextureID {
         //TODO
         TextureID { tex_num: 0 }
     }

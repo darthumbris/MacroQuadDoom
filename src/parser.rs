@@ -78,9 +78,9 @@ pub fn copy_and_capitalize_buffer(
 }
 
 struct WADHeader {
-    map_type: String,
-    lump_count: u32,
-    directory_offset: u32
+    pub map_type: String,
+    pub lump_count: u32,
+    pub directory_offset: u32
 }
 
 #[derive(Clone)]
@@ -237,5 +237,6 @@ pub fn parse_map(path: &str) -> WADData {
     read_colormap(&map, &mut offset, &mut wad_parsed);
     read_data_lumps(&map, &mut wad_parsed);
     println!("\ndone parsing!");
+    println!("Wad type: {}", wad_parsed.wad_header.map_type);
     wad_parsed
 }

@@ -28,6 +28,14 @@ impl Angle<f64> {
         Angle { degrees: radians * 180.0 / pi64 }
     }
 
+    pub fn from_bam_u(f: u32) -> Angle<f64> {
+        Angle { degrees: f as f64 * (90. / 0x40000000 as f64) }
+    }
+
+    pub fn from_bam_i(f: i32) -> Angle<f64> {
+        Angle { degrees: f as f64 * (90. / 0x40000000 as f64) }
+    }
+
     pub fn add(&mut self, angle: &Angle<f64>) {
         self.degrees += angle.degrees;
     }
@@ -42,8 +50,24 @@ impl Angle<f64> {
 
     //What the fuck
     pub fn normalized360(&self) -> Angle<f64> {
-        let temp = ((((0x40000000 as f64 / 90.) * self.degrees).floor() + 0.5) as i32) as u32;
-        Angle { degrees: (90. / 0x40000000 as f64) * (temp as i32) as f64 }
+        Angle { degrees: (90. / 0x40000000 as f64) * self.bams() as f64 }
+    }
+
+    fn normalized180(&self) -> Angle<f64> {
+        Angle { degrees: (90. / 0x40000000 as f64) * (self.bams() as i32) as f64 }
+    }
+
+    fn bams(&self) -> u32 {
+        ((((0x40000000 as f64 / 90.) * self.degrees).floor() + 0.5) as i32) as u32
+    }
+
+    pub fn abs_angle(angle_1: &Angle<f64>, angle_2: &Angle<f64>) -> Angle<f64> {
+        let degrees = angle_1.subtract_result(angle_2).normalized180().degrees.abs();
+        Angle { degrees}
+    }
+
+    pub fn to_vector(&self, length: f64) -> Vector2<f64> {
+        Vector2 { x: length * f64::cos(self.degrees * pi64 / 180. ), y: length * f64::sin(self.degrees * pi64 / 180. ) }
     }
 }
 
@@ -54,6 +78,14 @@ impl Angle<f32> {
 
     pub fn from_radians(radians: f32) -> Angle<f32> {
         Angle { degrees: radians * 180.0 / pi32 }
+    }
+
+    pub fn from_bam_u(f: u32) -> Angle<f32> {
+        Angle { degrees: f as f32 * (90. / 0x40000000 as f32) }
+    }
+
+    pub fn from_bam_i(f: i32) -> Angle<f32> {
+        Angle { degrees: f as f32 * (90. / 0x40000000 as f32) }
     }
 
     pub fn add(&mut self, angle: &Angle<f32>) {
@@ -70,20 +102,36 @@ impl Angle<f32> {
 
     //What the fuck
     pub fn normalized360(&self) -> Angle<f32> {
-        let temp = ((((0x40000000 as f32 / 90.) * self.degrees).floor() + 0.5) as i32) as u32;
-        Angle { degrees: (90. / 0x40000000 as f32) * (temp as i32) as f32 }
+        Angle { degrees: (90. / 0x40000000 as f32) * self.bams() as f32 }
+    }
+
+    fn normalized180(&self) -> Angle<f32> {
+        Angle { degrees: (90. / 0x40000000 as f32) * (self.bams() as i32) as f32 }
+    }
+
+    fn bams(&self) -> u32 {
+        ((((0x40000000 as f32 / 90.) * self.degrees).floor() + 0.5) as i32) as u32
+    }
+
+    pub fn abs_angle(angle_1: &Angle<f32>, angle_2: &Angle<f32>) -> Angle<f32> {
+        let degrees = angle_1.subtract_result(angle_2).normalized180().degrees.abs();
+        Angle { degrees}
+    }
+
+    pub fn to_vector(&self, length: f32) -> Vector2<f32> {
+        Vector2 { x: length * f32::cos(self.degrees * pi32 / 180. ), y: length * f32::sin(self.degrees * pi32 / 180. ) }
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct Transform {
-    x_offset: f64,
-    y_offset: f64,
-    base_y_offset: f64,
+    pub x_offset: f64,
+    pub y_offset: f64,
+    pub base_y_offset: f64,
     pub x_scale: f64,
     pub y_scale: f64,
-    angle: Angle<f64>,
-    base_angle: Angle<f64>
+    pub angle: Angle<f64>,
+    pub base_angle: Angle<f64>
 }
 
 impl Transform {
@@ -113,6 +161,24 @@ impl Vector2<f32> {
     pub fn angle(&self) -> Angle<f32> {
         Angle::<f32>::from_radians(self.y.atan2(self.x))
     }
+
+    pub fn add(&mut self, rhs: &Vector2<f32>) {
+        self.x += rhs.x;
+        self.y += rhs.y;
+    }
+
+    pub fn add_result(&self, rhs: &Vector2<f32>) -> Vector2<f32> {
+        Vector2 { x: self.x + rhs.x, y: self.y + rhs.y }
+    }
+
+    pub fn subtract(&mut self, rhs: &Vector2<f32>) {
+        self.x -= rhs.x;
+        self.y -= rhs.y;
+    }
+
+    pub fn subtract_result(&self, rhs: &Vector2<f32>) -> Vector2<f32> {
+        Vector2 { x: self.x - rhs.x, y: self.y - rhs.y }
+    }
 }
 
 impl Vector2<f64> {
@@ -131,6 +197,24 @@ impl Vector2<f64> {
 
     pub fn angle(&self) -> Angle<f64> {
         Angle::<f64>::from_radians(self.y.atan2(self.x))
+    }
+
+    pub fn add(&mut self, rhs: &Vector2<f64>) {
+        self.x += rhs.x;
+        self.y += rhs.y;
+    }
+
+    pub fn add_result(&self, rhs: &Vector2<f64>) -> Vector2<f64> {
+        Vector2 { x: self.x + rhs.x, y: self.y + rhs.y }
+    }
+
+    pub fn subtract(&mut self, rhs: &Vector2<f64>) {
+        self.x -= rhs.x;
+        self.y -= rhs.y;
+    }
+
+    pub fn subtract_result(&self, rhs: &Vector2<f64>) -> Vector2<f64> {
+        Vector2 { x: self.x - rhs.x, y: self.y - rhs.y }
     }
 }
 

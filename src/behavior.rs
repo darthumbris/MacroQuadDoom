@@ -2,12 +2,13 @@
 use std::ops::IndexMut;
 use std::ops::Index;
 use std::cmp::Ordering;
+use std::rc::Rc;
 // pub mod parse_behavior;
 pub use crate::parser::*;
 use crate::level::LevelLocals;
 
 #[derive(PartialEq)]
-enum Acs{
+pub enum Acs{
     AcsOld,
     AcsEnhanced,
     AcsLittleEnhanced,
@@ -15,15 +16,21 @@ enum Acs{
 }
 
 pub struct WADLevelBehavior {
-    marker: i32,
-    format: Acs,
-    data: Vec<u8>,
-    data_size: i32,
-    chunks: Vec<u8>,
-    should_localize: bool,
+    pub marker: i32,
+    pub format: Acs,
+    pub data: Vec<u8>,
+    pub data_size: i32,
+    pub chunks: Vec<u8>,
+    pub should_localize: bool,
 }
 
-enum WADLevelScriptInfo {
+impl WADLevelBehavior {
+    pub fn new() -> WADLevelBehavior {
+        WADLevelBehavior { marker: 0, format: Acs::AcsUnkown, data: vec![], data_size: 0, chunks: vec![], should_localize: false }
+    }
+}
+
+enum _WADLevelScriptInfo {
     Hexen(WADLevelScriptInfoHexen),
     ZDoomOld(WADLevelScriptInfoZdoomOld),
     ZDoomNew(WADLevelScriptInfoZdoomNew),
@@ -37,41 +44,41 @@ enum WADLevelScriptInfo {
 //Hexen version
 #[derive(Clone, Copy)]
 pub struct WADLevelScriptInfoHexen {
-    number: u32,
-    address: u32, //offset
-    arg_count: u32
+    pub number: u32,
+    pub address: u32, //offset
+    pub arg_count: u32
     //type is numer / 1000
 }
 
 //old zdoom version
 #[derive(Clone, Copy)]
 pub struct WADLevelScriptInfoZdoomOld {
-    number: i32,
-    type_: u16,
-    address: u32, 
-    arg_count: u32
+    pub number: i32,
+    pub type_: u16,
+    pub address: u32, 
+    pub arg_count: u32
 }
 
 //new zdoom version
 #[derive(Clone, Copy)]
 pub struct WADLevelScriptInfoZdoomNew {
-    number: i16,
-    type_: u8,
-    arg_count: u8,
-    address: u32 
+    pub number: i16,
+    pub type_: u8,
+    pub arg_count: u8,
+    pub address: u32 
 }
 
 //in Memory version
 #[derive(Clone, Eq)]
 pub struct WADLevelScriptInfoMemory {
-    number: i32,
-    address: u32,
-    type_: u8,
-    arg_count: u8,
-    var_count: u16,
-    flags: u16,
-    local_arrays: Option<AcsLocalArrays>,
-    profile_data: Option<AcsProfileInfo>
+    pub number: i32,
+    pub address: u32,
+    pub type_: u8,
+    pub arg_count: u8,
+    pub var_count: u16,
+    pub flags: u16,
+    pub local_arrays: Option<AcsLocalArrays>,
+    pub profile_data: Option<AcsProfileInfo>
 }
 
 impl PartialOrd for WADLevelScriptInfoMemory {
@@ -93,8 +100,8 @@ impl PartialEq for WADLevelScriptInfoMemory {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct AcsProfileInfo {
-    total_instr: u128,
+pub struct AcsProfileInfo {
+    total_instr: u64,
     num_runs: u32,
     min_instr_per_run: u32,
     max_instr_per_run: u32
@@ -103,7 +110,7 @@ struct AcsProfileInfo {
 
 impl AcsProfileInfo {
     pub fn add_run(&mut self, num_instr: u32) {
-        self.total_instr += u128::from(num_instr);
+        self.total_instr += u64::from(num_instr);
         self.num_runs += 1;
         if self.num_runs < self.min_instr_per_run {
             self.min_instr_per_run = num_instr;
@@ -131,9 +138,9 @@ impl AcsProfileInfo {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-struct AcsLocalArrays {
-    count : u32,
-    info: Vec<AcsLocalArrayInfo>
+pub struct AcsLocalArrays {
+    pub count : u32,
+    pub info: Vec<AcsLocalArrayInfo>
 
     //destructor
 }
@@ -163,14 +170,14 @@ impl AcsLocalArrays {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct AcsLocalArrayInfo {
-    size: u32,
-    offset: i32
+pub struct AcsLocalArrayInfo {
+    pub size: u32,
+    pub offset: i32
 }
 
-struct AcsLocalVariables {
-    memory: Vec<i32>,
-    count: usize
+pub struct AcsLocalVariables {
+    pub memory: Vec<i32>,
+    pub count: usize
 }
 
 impl Index<usize> for AcsLocalVariables {
@@ -194,26 +201,26 @@ impl AcsLocalVariables {
 
     //constructor
 
-    fn reset(&mut self, memory: Vec<i32>, count: usize) {
+    fn _reset(&mut self, memory: Vec<i32>, count: usize) {
         self.memory = memory;
         self.count = count;
     }
 
-    fn get_pointer(&self) -> &Vec<i32> {
+    fn _get_pointer(&self) -> &Vec<i32> {
         &self.memory
     }
 }
 
-struct ZDoomBehaviour {
+struct _ZDoomBehaviour {
     // pub map_vars,
     level: Option<Box<LevelLocals>>,
     data: Option<Vec<u8>>,
     chunks: Option<Vec<u8>>,
     scripts: Option<Vec<WADLevelScriptInfoMemory>>,
-    functions: Option<Vec<ScriptFunction>>,
+    functions: Option<Vec<_ScriptFunction>>,
     function_profile_data: Option<AcsProfileInfo>,
-    array_store: Option<ArrayInfo>,
-    arrays: Option<Vec<ArrayInfo>>,
+    array_store: Option<_ArrayInfo>,
+    arrays: Option<Vec<_ArrayInfo>>,
     format: Acs,
     lump_num: i32,
     data_size: i32,
@@ -225,14 +232,14 @@ struct ZDoomBehaviour {
     library_id: u32,
     should_localize: bool,
     map_var_store: [i32;128],
-    imports: Option<Vec<Box<ZDoomBehaviour>>>,
+    imports: Option<Vec<Rc<_ZDoomBehaviour>>>,
     module_name: [u8;9],
     jump_points: Option<Vec<i32>>,
 
 }
 
-impl ZDoomBehaviour {
-    fn new() -> Self {
+impl _ZDoomBehaviour {
+    fn _new() -> Self {
         Self { 
             script_count: 0, 
             function_count: 0, 
@@ -262,12 +269,12 @@ impl ZDoomBehaviour {
     }
 }
 
-struct ArrayInfo {
+struct _ArrayInfo {
     size: u32,
     elements: Vec<i32>
 }
 
-struct ScriptFunction {
+struct _ScriptFunction {
     arg_count: u8,
     has_return_value: u8,
     import_num: u8,
@@ -276,4 +283,4 @@ struct ScriptFunction {
     local_arrays: AcsLocalArrays
 }
 
-struct BehaviorContainer {}
+struct _BehaviorContainer {}

@@ -20,31 +20,40 @@ pub type LineDefIndex = i32; //if -1 -> does not exist (NULL)
 pub type SegIndex = i32; //if -1 -> does not exist (NULL)
 pub type SideDefIndex = i32; //if -1 -> does not exist (NULL)
 pub type VertexIndex = i32;
+pub type NodeIndex = i32;
 
 #[derive(Clone)]
 pub struct SubSector {
     pub sector: SectorIndex,
-    polys: Box<PolyNode>,
-    bsp: Box<MiniBSP>,
-    pub first_line: Vec<SegIndex>,
-    render_sector: SectorIndex,
-    section: Box<Section>,
+    pub polys: Option<Rc<PolyNode>>,
+    pub bsp: Option<Rc<MiniBSP>>,
+    pub first_line: SegIndex,
+    pub render_sector: SectorIndex,
+    //TODO section: Box<Section>,
     pub subsector_num: i32,
     pub line_count: u32,
-    flags : u16,
-    map_section: i16,
+    pub flags : u16,
+    pub map_section: i16,
     
-    valid_count: i32,
-    hacked: u8,
+    pub valid_count: i32,
+    pub hacked: u8,
 
-    portal_coverage: [PortalCoverage;2],
-    light_map: [Box<LightMapSurface>;2]
+    //TODO portal_coverage: [PortalCoverage;2],
+    //TODO light_map: [Box<LightMapSurface>;2]
 
-    //fn buildpolybsp
-    //fn index
+    
 
     //TODO implement the functions for subsector
 
+}
+
+impl SubSector {
+    pub fn new() -> SubSector {
+        SubSector { sector: -1, first_line: -1, render_sector: -1, subsector_num: 0, line_count: 0, flags: 0, map_section: 0, valid_count: 0, hacked: 0, polys: None, bsp: None}
+    }
+
+    //TODOfn buildpolybsp
+    //TODOfn index
 }
 
 pub struct Line {
@@ -54,21 +63,21 @@ pub struct Line {
 
     pub flags: u32,
     pub flags2: u32,
-    activation: u32,
+    pub activation: u32,
     pub special: i32,
     pub args: [i32;5],
     pub alpha: f64,
     pub sidedef: [SideDefIndex;2],
-    bbox: [f64;4],
+    pub bbox: [f64;4],
     pub front_sector: SectorIndex,
     pub back_sector: SectorIndex,
-    valid_count: i32,
-    lock_number: i32,
+    pub valid_count: i32,
+    pub lock_number: i32,
     pub portal_index: u32,
     pub portal_transfered: u32,
-    auto_map_style: AutoMapLineStyle,
-    health: i32,
-    health_group: i32,
+    pub auto_map_style: AutoMapLineStyle,
+    pub health: i32,
+    pub health_group: i32,
     pub line_num: i32,
 
     //TODO functions
@@ -80,7 +89,7 @@ impl Line {
     }
 
     pub fn adjust_line(&self) {
-        println!("adjusting line TODO");
+        // println!("adjusting line TODO");
         //TODO
     }
 
@@ -96,20 +105,20 @@ impl Line {
 #[derive(Clone)]
 pub struct Side {
     pub sector: SectorIndex, //sector sidedef is facing //geen option
-    attached_decals: Option<BaseDecal>,
+    pub attached_decals: Option<BaseDecal>,
     textures: [Part;3],
     pub linedef: LineDefIndex, //is geen option
     pub left_side: u32,
     pub right_side: u32,
     pub texel_length: u16,
-    light: i16,
-    tier_lights: [i16;3],
+    pub light: i16,
+    pub tier_lights: [i16;3],
     pub flags: u16,
     pub udmf_index: i32,
-    light_head: Option<LightNode>,
-    lightmap: Option<LightMapSurface>,
-    segs: Vec<SegIndex>, //all segs in ascending order
-    num_segs: i32,
+    pub light_head: Option<LightNode>,
+    pub lightmap: Option<LightMapSurface>,
+    pub segs: Vec<SegIndex>, //all segs in ascending order
+    pub num_segs: i32,
     pub side_num: i32,
 
     //TODO functions, Part and BaseDecal struct
@@ -125,20 +134,20 @@ impl Side {
         self.side_num
     }
 
-    pub fn set_texture_x_offset(&mut self, offset: f64) {
-        
+    pub fn set_texture_x_offset(&mut self, _offset: f64) {
+        //TODO
     }
 
-    pub fn set_texture_y_offset(&mut self, offset: f64) {
-
+    pub fn set_texture_y_offset(&mut self, _offset: f64) {
+        //TODO
     }
 
-    pub fn set_texture_x_scale(&mut self, scale: f64) {
-
+    pub fn set_texture_x_scale(&mut self, _scale: f64) {
+        //TODO
     }
 
-    pub fn set_texture_y_scale(&mut self, scale: f64) {
-
+    pub fn set_texture_y_scale(&mut self, _scale: f64) {
+        //TODO
     }
 
     pub fn set_texture(&mut self, which: usize, tex: TextureID) {
@@ -155,15 +164,13 @@ pub struct Vertex {
     p: Vector2<f64>,
 
     pub vertex_num: i32,
-    view_angle: u32, //u32 angle_t
-    angle_time: i32,
+    pub view_angle: u32, //u32 angle_t
+    pub angle_time: i32,
     dirty: bool,
-    num_heights: i32,
-    num_sectors: i32,
-    sectors: Vec<SectorIndex>,
-    height_list: Vec<f32>,
-
-    //TODO functions and constructors etc
+    pub num_heights: i32,
+    pub num_sectors: i32,
+    pub sectors: Vec<SectorIndex>,
+    pub height_list: Vec<f32>,
 }
 
 impl Vertex {
@@ -183,6 +190,20 @@ impl Vertex {
     pub fn fy(&self) -> f64 {
         self.p.y
     }
+
+    pub fn set_i32(&mut self, x: i32, y: i32) {
+        self.p.x = x as f64 / 65536.;
+        self.p.y = y as f64 / 65536.;
+    }
+
+    pub fn set_f64(&mut self, x: f64, y: f64) {
+        self.p.x = x / 65536.;
+        self.p.y = y / 65536.;
+    }
+
+    pub fn set_from_vector(&mut self, pos: &Vector2<f64>) {
+        self.p = pos.to_owned();
+    }
 }
 
 #[derive(Clone)]
@@ -192,50 +213,50 @@ pub struct Sector {
     pub e: ExtSectorIndex, //geen option
     pub floorplane: SectorPlane,
     pub ceilingplane: SectorPlane,
-    center_spot: Vector2<f64>,
-    lines: Vec<LineIndex>,
+    pub center_spot: Vector2<f64>,
+    pub lines: Vec<LineIndex>,
     pub height_sec: SectorIndex,
 
     pub sector_portal_thinglist: SecNode,
     pub touching_render_things: SecNode,
 
-    special_colors: [PalEntry;5],
-    additive_colors: [PalEntry;5],
+    pub special_colors: [PalEntry;5],
+    pub additive_colors: [PalEntry;5],
     pub color_map: ColorMap,
 
     pub special: i32,
-    sky: i32,
-    valid_count: i32,
+    pub sky: i32,
+    pub valid_count: i32,
 
     //color maps
     pub bottom_map: u32,
     pub mid_map: u32,
     pub top_map: u32,
 
-    trans_door: bool,
+    pub trans_door: bool,
     pub light_level: i16,
     pub more_flags: u16,
     pub flags: u32,
 
-    portals: [u32;2],
-    portal_group: i32,
+    pub portals: [u32;2],
+    pub portal_group: i32,
 
     pub sector_num: i32,
 
     //GL only stuff
-    subsector_count: i32,
-    reflect: [f32;2],
-    trans_door_height: f64,
-    subsectors: Vec<SubSectorIndex>, //TODO maybe smart pointers
-    portals_fc: [SectorPortalGroup;2],
+    pub subsector_count: i32,
+    pub reflect: [f32;2],
+    pub trans_door_height: f64,
+    pub subsectors: Vec<SubSectorIndex>, //TODO maybe smart pointers
+    pub portals_fc: [SectorPortalGroup;2],
 
-    vbo_index: [i32;4],
-    ibo_index: [i32;4],
-    vbo_height: [[f64;2];2],
-    vbo_count: [i32;2],
+    pub vbo_index: [i32;4],
+    pub ibo_index: [i32;4],
+    pub vbo_height: [[f64;2];2],
+    pub vbo_count: [i32;2],
     pub ibo_count: i32,
 
-    has_light_map: bool,
+    pub has_light_map: bool,
 
     //Stuff not to do with renderer
     //TODO sound_target, 
@@ -259,25 +280,25 @@ pub struct Sector {
     pub sec_name: String,
     pub sec_type: i16,
     
-    sound_traversed: u8,
-    stair_lock: i8,
+    pub sound_traversed: u8,
+    pub stair_lock: i8,
 
     pub prev_sec: i32,
     pub next_sec: i32,
 
-    damage_type: String,
-    damage_amount: i32,
-    damage_interval: i16,
-    leaky_damage: i16,
+    pub damage_type: String,
+    pub damage_amount: i32,
+    pub damage_interval: i16,
+    pub leaky_damage: i16,
 
     pub zone_number: u16,
 
-    health_floor: i32,
-    health_ceiling: i32,
-    health_3d: i32,
-    health_floor_group: i32,
-    health_ceiling_group: i32,
-    health_3d_group: i32,
+    pub health_floor: i32,
+    pub health_ceiling: i32,
+    pub health_3d: i32,
+    pub health_floor_group: i32,
+    pub health_ceiling_group: i32,
+    pub health_3d_group: i32,
 }
 
 bitflags! {
@@ -327,6 +348,7 @@ bitflags! {
         const WrapMidTex = 0x00100000;
         const CheckSwitchRange = 0x00400000;
         const AddTrans = 0x00000400;	// additive translucency (can only be set internally)
+        const TwoSided = 0x00000004;
     }
 
     pub struct Sides: u32 {
@@ -347,7 +369,6 @@ impl Sector {
     }
 
     pub fn set_plane_tex_z(&mut self, pos: usize, val: f64, dirtify: Option<bool>) {
-        println!("setting plane_ tex_z: {}", val);
         self.splane[pos].tex_z = val;
         if dirtify.unwrap_or(false) { Self::set_all_vertices_dirty(self);}
         Self::check_overlap(self)
@@ -405,7 +426,7 @@ impl Sector {
         self.splane[pos].x_form.y_scale = val;
     }
 
-    pub fn set_texture(&mut self, pos: usize, texure: TextureID) {
+    pub fn set_texture(&mut self, _pos: usize, _texure: TextureID) {
         //TODO
     }
 }
@@ -414,22 +435,30 @@ impl Sector {
 pub enum SectorE {
     Floor = 0,
     Ceiling = 1,
-    WallTop,
-    WallBottom,
-    Sprites
+    
+    // WallTop,
+    // WallBottom,
+    // Sprites
 }
 
+#[derive(Clone)]
 pub struct Seg {
     pub v1: VertexIndex,
     pub v2: VertexIndex,
-    sidedef: SideDefIndex,
-    linedef: LineDefIndex,
+    pub sidedef: SideDefIndex,
+    pub linedef: LineDefIndex,
 
-    front_sector: SectorIndex,
-    back_sector: SectorIndex,
+    pub front_sector: SectorIndex,
+    pub back_sector: SectorIndex,
 
-    side_frac: f32,
+    pub side_frac: f32,
     pub seg_num: i32,
+}
+
+impl Seg {
+    pub fn new() -> Seg {
+        Seg { v1: -1, v2: -1, sidedef: -1, linedef: -1, front_sector: -1, back_sector: -1, side_frac: 0., seg_num: 0 }
+    }
 }
 
 #[derive(Clone)]
@@ -440,20 +469,20 @@ struct Section {
 pub struct ExtSector {
     pub x_floor: XFloor,//3Dfloors
     pub fake_floor: Vec<SectorIndex>,
-    mid_tex: MidTex,
-    linked: LinkedSectors,
+    pub mid_tex: MidTex,
+    pub linked: Linked,
     pub vertices: Vec<VertexIndex>
 }
 
 impl ExtSector {
     pub fn new() -> ExtSector {
-        ExtSector { x_floor: XFloor::new(), fake_floor: vec![], mid_tex: MidTex::new(), linked: LinkedSectors::new(), vertices: vec![] }
+        ExtSector { x_floor: XFloor::new(), fake_floor: vec![], mid_tex: MidTex::new(), linked: Linked::new(), vertices: vec![] }
     }
 }
 
 pub struct XFloor {
     pub f_floors: Vec<Floor3D>,
-    light_list: Vec<LightList>,
+    pub light_list: Vec<LightList>,
     pub attached: Vec<SectorIndex>
 }
 
@@ -467,11 +496,11 @@ impl XFloor {
 pub struct Floor3D {
     pub model: SectorIndex
 }
-struct LightList {}
+pub struct LightList {}
 
-struct MidTex {
-    floor: Plane,
-    ceiling: Plane
+pub struct MidTex {
+    pub floor: Plane,
+    pub ceiling: Plane
 }
 
 impl MidTex {
@@ -480,9 +509,9 @@ impl MidTex {
     }
 }
 
-struct Plane {
-    attached_sectors: Vec<Box<Sector>>,
-    attached_lines: Vec<Box<Line>>
+pub struct Plane {
+    pub attached_sectors: Vec<Rc<Sector>>,
+    pub attached_lines: Vec<Rc<Line>>
 }
 
 impl Plane {
@@ -491,13 +520,19 @@ impl Plane {
     }
 }
 
-struct Linked {
-    floor: LinkedSectors,
-    ceiling: LinkedSectors
+pub struct Linked {
+    pub floor: LinkedSectors,
+    pub ceiling: LinkedSectors
 }
 
-struct LinkedSectors {
-    sectors: Vec<LinkedSector>
+impl Linked {
+    pub fn new() -> Linked {
+        Linked { floor: LinkedSectors::new(), ceiling: LinkedSectors::new() }
+    }
+}
+
+pub struct LinkedSectors {
+    pub sectors: Vec<LinkedSector>
 }
 
 impl LinkedSectors {
@@ -507,9 +542,9 @@ impl LinkedSectors {
 }
 
 #[derive(Default)]
-struct LinkedSector {
-    sector: Option<Box<Sector>>,
-    type_: i32
+pub struct LinkedSector {
+    pub sector: Option<Rc<Sector>>,
+    pub type_: i32
 }
 
 #[derive(Default)]
@@ -517,57 +552,81 @@ pub struct LevelElements {
     pub vertexes: Vec<Rc<RefCell<Vertex>>>,
     pub sectors: Vec<Rc<RefCell<Sector>>>,
     pub extsectors: Vec<ExtSector>,
-    line_buffer: Vec<Box<Line>>,
-    subsector_buffer: Vec<Box<SubSector>>,
-    pub lines: Vec<Rc<RefCell<Line>>>, //TODO this maybe the correct one
+    pub line_buffer: Vec<Box<Line>>,
+    pub subsector_buffer: Vec<Box<SubSector>>,
+    pub lines: Vec<Rc<RefCell<Line>>>,
     pub sides: Vec<Rc<RefCell<Side>>>,
-    seg_buffer: Vec<Box<Seg>>,
+    pub seg_buffer: Vec<Box<Seg>>,
     pub segs: Vec<Rc<RefCell<Seg>>>,
     pub subsectors: Vec<Rc<RefCell<SubSector>>>,
     pub nodes: Vec<Rc<RefCell<Node>>>,
-    game_subsectors: Vec<SubSector>,
-    game_nodes: Vec<Node>,
-    head_game_node: Rc<Node>,
-    reject_matrix: Vec<u8>,
-    z_zones: Vec<Zone>,
-    poly_objects: Vec<PolyObj>,
-    sector_portals: Vec<SectorPortal>,
-    line_portals: Vec<LinePortal>,
+    pub game_subsectors: Vec<SubSector>,
+    pub game_nodes: Vec<Node>,
+    pub head_game_node: Rc<Node>,
+    pub reject_matrix: Vec<u8>,
+    pub z_zones: Vec<Zone>,
+    pub poly_objects: Vec<PolyObj>,
+    pub sector_portals: Vec<SectorPortal>,
+    pub line_portals: Vec<LinePortal>,
 }
 
-struct Zone {}
+pub struct Zone {}
 
 #[derive(Default)]
 pub struct Node {
-    x: i32,
-    y: i32,
-    dx: i32,
-    dy: i32,
+    pub x: i32,
+    pub y: i32,
+    pub dx: i32,
+    pub dy: i32,
 
-    len: f32,
+    pub len: f32,
 
+    
     //union / enum
     //bbox[2][4]
     //nb_bbox[2][4]
     
+    pub bbox: [[f32;4];2],
 
     //union enum
     //void* children[2]
     //int children[2]
+    pub children: [ChildNode;2],
+
     pub node_num: i32
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct ChildNode {
+    /* one of them needs to be -1 and the other can be -1 or >= 0
+        depending of which one of them is not -1 it is either a child that points to a subsector or another node */
+    pub subsector: SubSectorIndex,
+    pub node: NodeIndex
+}
+
+impl ChildNode {
+    pub fn new(subsector: i32, node: i32) -> ChildNode {
+        ChildNode { subsector, node }
+    }
+}
+
+impl Node {
+    pub fn new() -> Node {
+        Node { x: 0, y: 0, dx: 0, dy: 0, len: 0., node_num: 0, children: [ChildNode::new(-1, -1);2], bbox: [[0.;4];2] }
+    }
 }
 
 #[derive(Clone, Copy)]
 pub struct Splane {
-    x_form: Transform,
-    flags: i32,
-    lights: i32,
-    alpha: f64,
-    tex_z: f64,
-    glow_color: PalEntry,
-    glow_height: f32,
-    texture: TextureID,
-    texture_fx: TextureManipulation
+    pub x_form: Transform,
+    pub flags: i32,
+    pub lights: i32,
+    pub alpha: f64,
+    pub tex_z: f64,
+    pub glow_color: PalEntry,
+    pub glow_height: f32,
+    pub texture: TextureID,
+    pub texture_fx: TextureManipulation
 }
 
 impl Splane {
@@ -578,13 +637,13 @@ impl Splane {
 
 #[derive(Default, Clone)]
 pub struct SecNode{
-    sector: Option<Box<Sector>>,
-    thing: Actor,
-    thing_prev: Option<Box<SecNode>>,
-    thing_next: Option<Box<SecNode>>,
-    sec_prev: Option<Box<SecNode>>,
-    sec_next: Option<Box<SecNode>>,
-    visited: bool
+    pub sector: Option<Rc<Sector>>,
+    pub thing: Actor,
+    pub thing_prev: Option<Rc<SecNode>>,
+    pub thing_next: Option<Rc<SecNode>>,
+    pub sec_prev: Option<Rc<SecNode>>,
+    pub sec_next: Option<Rc<SecNode>>,
+    pub visited: bool
 }
 
 #[derive(Default)]

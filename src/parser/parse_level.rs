@@ -1,8 +1,9 @@
 use bitreader::BitReader;
 
 use crate::parser::*;
-// use crate::behavior::parse_behavior::parse_behavior;
+use crate::behavior::*;
 
+#[derive(Debug)]
 #[repr(u16)]
 enum Lumps {
     THINGS = 1,
@@ -19,11 +20,11 @@ enum Lumps {
 }
 
 pub struct WADLevelBlockmap {
-    x: u16,
-    y: u16,
-    num_cols: u16,
-    num_rows: u16,
-    blocklists: Vec<Vec<u16>>
+    pub x: u16,
+    pub y: u16,
+    pub num_cols: u16,
+    pub num_rows: u16,
+    pub blocklists: Vec<Vec<u16>>
 }
 
 pub struct WADLevelSector {
@@ -37,17 +38,17 @@ pub struct WADLevelSector {
 }
 
 pub struct WADLevelSubSector {
-    num_segs: i16,
-    start_seg: i16
+    pub num_segs: i16,
+    pub start_seg: i16
 }
 
 pub struct WADLevelSeg {
-    start: u16, //starting vertex
-    end: u16, //ending vertex
-    angle: i16,
-    linedef: u16, //index of the linedef
-    direction: i16, //0: same as linedef, 1: opposite of linedef
-    offset: i16
+    pub start: u16, //starting vertex
+    pub end: u16, //ending vertex
+    pub angle: i16,
+    pub linedef: u16, //index of the linedef
+    pub direction: i16, //0: same as linedef, 1: opposite of linedef
+    pub offset: i16
 }
 
 #[derive(Clone, Copy)]
@@ -115,20 +116,46 @@ pub struct WADLevelThing
 }
 
 pub struct WADLevelNode {
-    x_start: i16,
-    y_start: i16,
-    dx: i16,
-    dy: i16,
-    right_y_upper: i16,
-    right_y_lower: i16,
-    right_x_lower: i16,
-    right_x_upper: i16,
-    left_y_upper: i16,
-    left_y_lower: i16,
-    left_x_lower: i16,
-    left_x_upper: i16,
-    right_child: i16,
-    left_child: i16
+    pub x_start: i16,
+    pub y_start: i16,
+    pub dx: i16,
+    pub dy: i16,
+    pub right_y_upper: i16,
+    pub right_y_lower: i16,
+    pub right_x_lower: i16,
+    pub right_x_upper: i16,
+    pub left_y_upper: i16,
+    pub left_y_lower: i16,
+    pub left_x_lower: i16,
+    pub left_x_upper: i16,
+    pub right_child: u16,
+    pub left_child: u16
+}
+
+impl WADLevelNode {
+    pub fn get_bbox(&self, j: usize, k: usize) -> i16 {
+        match j {
+            0 => {
+                match k {
+                    0 => {return self.right_y_upper}
+                    1 => {return self.right_y_lower}
+                    2 => {return self.right_x_lower}
+                    3 => {return self.right_x_upper}
+                    _ => {eprintln!("Should not happen");return -1}
+                }
+            }
+            1 => {
+                match k {
+                    0 => {return self.left_y_upper}
+                    1 => {return self.left_y_lower}
+                    2 => {return self.left_x_lower}
+                    3 => {return self.left_x_upper}
+                    _ => {eprintln!("Should not happen"); return -1}
+                }
+            }
+            _ => {eprintln!("Should not happen");return -1}
+        }
+    }
 }
 
 //TODO this should be in a udmf format 
@@ -146,9 +173,20 @@ pub struct WADLevel {
     pub reject: Vec<Vec<bool>>,
     pub format: Format,
     pub has_behavior: bool,
-    pub is_text: bool
+    pub is_text: bool,
+    pub behavior: Option<WADLevelBehavior>,
     // behavior, (HEXEN and udmf only)
+    pub znodes: Vec<Znode>, //TODO parse znodes
+    pub gl_znodes: Vec<GlZnode> //TODO parse glznodes
     // znodes (udmf only)
+}
+
+pub struct Znode {
+    //TODO
+}
+
+pub struct GlZnode {
+    //TODO
 }
 
 #[derive(Debug, PartialEq)]
@@ -401,8 +439,8 @@ fn parse_nodes(lump: &Vec<u8>) -> Vec<WADLevelNode> {
         let left_y_lower = read_short(lump, &mut offset).unwrap();
         let left_x_lower = read_short(lump, &mut offset).unwrap();
         let left_x_upper = read_short(lump, &mut offset).unwrap();
-        let right_child = read_short(lump, &mut offset).unwrap();
-        let left_child = read_short(lump, &mut offset).unwrap();
+        let right_child = read_ushort(lump, &mut offset).unwrap();
+        let left_child = read_ushort(lump, &mut offset).unwrap();
         let node  = WADLevelNode {
             x_start,
             y_start,
@@ -455,7 +493,7 @@ fn parse_sectors(lump: &Vec<u8>) -> Vec<WADLevelSector> {
 }
 
 //TODO see if this is even needed
-fn parse_blockmap(lump: &Vec<u8>) -> WADLevelBlockmap {
+fn _parse_blockmap(lump: &Vec<u8>) -> WADLevelBlockmap {
     let mut offset: usize = 0;
 
     let x = read_ushort(lump, &mut offset).unwrap();
@@ -558,16 +596,19 @@ pub fn read_levels(wad_data: &Vec<u8>, wad_parsed: &mut WADData, index: usize) {
         let sectors = parse_sectors(&get_lump_from_dir(index + Lumps::SECTORS as usize, wad_parsed, wad_data));
         let reject = parse_rejects(&get_lump_from_dir(index + Lumps::REJECT as usize, wad_parsed, wad_data), sectors.len());
         // let blockmap = parse_blockmap(&get_lump_from_dir(index + Lumps::BLOCKMAP as usize, wad_parsed, wad_data));
+        println!("blockmap parser for now disabled: {:?}", Lumps::BLOCKMAP);
         if format == Format::DOOM {
             things = parse_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
             linedefs = parse_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
-            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text });
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text, behavior: None, znodes: vec![], gl_znodes: vec![] });
         }
         else if format == Format::HEXEN {
             has_behavior = true;
             things = parse_hexen_things(&get_lump_from_dir(index + Lumps::THINGS as usize, wad_parsed, wad_data));
             linedefs = parse_hexen_linedefs(&get_lump_from_dir(index + Lumps::LINEDEFS as usize, wad_parsed, wad_data));
-            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text });
+            let behavior = Some(WADLevelBehavior::new());
+            println!("Still need to implement parsing of behavior: {:?}", Lumps::BEHAVIOR);
+            wad_parsed.levels.push(WADLevel { name, things, linedefs, sidedefs, vertexes, segs, ssectors, nodes, sectors, reject, format, has_behavior, is_text, behavior, znodes: vec![], gl_znodes: vec![] });
         }
     }
     

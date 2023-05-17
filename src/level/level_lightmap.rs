@@ -5,21 +5,21 @@ use std::rc::Rc;
 
 #[derive(Default)]
 pub struct LightMaps {
-    surfaces: Vec<LightMapSurface>,
-    tex_coords: Vec<f32>,
-    tex_count: i32,
-    tex_size: i32,
-    tex_data: Vec<u16>,
+    _surfaces: Vec<LightMapSurface>,
+    _tex_coords: Vec<f32>,
+    _tex_count: i32,
+    _tex_size: i32,
+    _tex_data: Vec<u16>,
 }
 
 #[derive(Clone)]
 pub struct LightMapSurface {
-    type_: SurfaceType,
-    subsector: Box<SubSector>,
-    side: Box<Side>,
-    control_sector: Box<Sector>,
-    light_map_num: u32,
-    tex_coords: Vec<f32>
+    _type_: SurfaceType,
+    _subsector: Box<SubSector>,
+    _side: Box<Side>,
+    _control_sector: Box<Sector>,
+    _light_map_num: u32,
+    _tex_coords: Vec<f32>
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -37,32 +37,32 @@ pub struct LightNode {}
 
 #[derive(Default)]
 pub struct LightProbes {
-    light_probes: Vec<LightProbe>,
-    min_x: i32,
-    min_y: i32,
-    width: i32,
-    height: i32,
-    cell_size: i32, // = 32
-    cells: Vec<LightProbeCell>
+    _light_probes: Vec<LightProbe>,
+    _min_x: i32,
+    _min_y: i32,
+    _width: i32,
+    _height: i32,
+    _cell_size: i32, // = 32
+    _cells: Vec<LightProbeCell>
 }
 
 struct LightProbe {
-    x: f32,
-    y: f32,
-    z: f32,
-    red: f32,
-    green: f32,
-    blue: f32
+    _x: f32,
+    _y: f32,
+    _z: f32,
+    _red: f32,
+    _green: f32,
+    _blue: f32
 }
 
 struct LightProbeCell {
-    first_probe: Option<Rc<[LightProbe]>>,
-    probe_count: i32
+    _first_probe: Option<Rc<[LightProbe]>>,
+    _probe_count: i32
 }
 
-struct DynamicLights {}
+// struct DynamicLights {}
 
-struct LightMode {}
+// struct LightMode {}
 
 #[derive(Clone)]
 pub struct ColorMap {
@@ -122,10 +122,11 @@ impl PalEntry {
     pub fn set_rgb(&mut self, other: u32) {
         match self {
             PalEntry::D(t) => {
-                *t = t.to_owned() & 0xffffff;
+                *t = other & 0xffffff;
             }
             PalEntry::Argb(t) => {
-                *t = Argb{a: t.a & 0xff, b: t.b & 0xff, r: t.r & 0xff, g: t.g & 0xff};
+                let argb = other.to_le_bytes();
+                *t = Argb{a: argb[0] & 0xff, r: argb[1] & 0xff, g: argb[2] & 0xff, b: argb[3] & 0xff};
             }
         }
     }

@@ -2,17 +2,17 @@
 
 #[derive(Clone)]
 pub struct PortalCoverage {
-    subsectors: Vec<u32>, //pointer to subsectors
-    subsector_count: i32
+    _subsectors: Vec<u32>, //pointer to subsectors
+    _subsector_count: i32
 }
 
 #[derive(Default)]
 pub struct PortalInfo {
-    displacements: DisplacementTable,
-    portal_block_map: PortalBlockMap,
-    linked_portals: Vec<Box<LinePortal>>,
-    portal_groups: Vec<Box<SectorPortalGroup>>,
-    line_portal_spans: Vec<LinePortalSpan>,
+    _displacements: DisplacementTable,
+    _portal_block_map: PortalBlockMap,
+    _linked_portals: Vec<Box<LinePortal>>,
+    _portal_groups: Vec<Box<SectorPortalGroup>>,
+    _line_portal_spans: Vec<LinePortalSpan>,
 }
 
 #[derive(Default)]

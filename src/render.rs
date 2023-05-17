@@ -1,6 +1,6 @@
 use macroquad::prelude::*;
 
-use crate::{behavior::parse_level::{WADLevelVertex, WADLevelLinedef}, vector::Vector2, MapTransform};
+use crate::{parser::parse_level::{WADLevelVertex, WADLevelLinedef}, vector::Vector2, MapTransform};
 pub use crate::player::Player;
 
 pub fn render(wall: Texture2D, player: &Player, verts: &Vec<WADLevelVertex>, linedefs: &Vec<WADLevelLinedef>, transform: MapTransform, mesh: &Mesh) {

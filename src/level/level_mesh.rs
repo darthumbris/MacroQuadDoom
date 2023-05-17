@@ -23,13 +23,13 @@ pub struct LevelMesh {
 
 #[derive(Debug)]
 struct Surface {
-    type_: SurfaceType,
-    type_index: i32,
-    vert_count: u32,
-    start_vert_index: u32,
-    plane: SectorPlane,
-    control_sector: SectorIndex,
-    b_sky: bool
+    pub type_: SurfaceType,
+    _type_index: i32,
+    pub vert_count: u32,
+    pub start_vert_index: u32,
+    _plane: SectorPlane,
+    _control_sector: SectorIndex,
+    _b_sky: bool
 }
 
 struct SidesS {
@@ -169,7 +169,7 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &doom_map.elements.segs[sub.first_line[i] as usize].borrow_mut();
+            let seg = &doom_map.elements.segs[sub.first_line as usize + i].borrow_mut();
             let v1_seg = doom_map.vertexes[seg.v1 as usize].borrow_mut();
             let v1 = Self::to_f32_vector2(&v1_seg.f_pos());
 
@@ -180,7 +180,7 @@ impl LevelMesh {
         let type_ = SurfaceType::STCeiling;
         let control_sector = if is_3d_floor {sec_index} else {-1};
 
-        self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky });
+        self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: b_sky });
     }
 
     fn create_floor_surfaces(&mut self, doom_map: &LevelLocals, sub: &SubSector, sec_index: SectorIndex, type_index: i32, is_3d_floor: bool) {
@@ -203,7 +203,7 @@ impl LevelMesh {
         let verts = &mut self.vertices;
 
         for i in 0..vert_count as usize{
-            let seg = &doom_map.elements.segs[sub.first_line[vert_count as usize - 1 - i] as usize].borrow_mut();
+            let seg = &doom_map.elements.segs[sub.first_line as usize + vert_count as usize - 1 - i].borrow_mut();
             let v1_seg = doom_map.vertexes[seg.v1 as usize].borrow_mut();
             let v1 = Self::to_f32_vector2(&v1_seg.f_pos());
 
@@ -215,7 +215,7 @@ impl LevelMesh {
         let type_ = SurfaceType::STFloor;
         let control_sector = if is_3d_floor {sec_index} else {-1};
 
-        self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky });
+        self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: b_sky });
     }
 
     fn create_side_surfaces(&mut self, doom_map: &LevelLocals, side: &Side, tex_man: &TextureManager) {
@@ -267,7 +267,7 @@ impl LevelMesh {
                 Self::create_side_surfaces_bottom_seg(self, side, &v1, &v2, type_index, &mut sides, tex_man);
             }
             if v1_top > v1_top_back || v2_top > v2_top_back {
-                let b_sky = Self::is_top_side_sky(front_sector, back_sec, side);
+                let b_sky = Self::is_top_side_sky(front_sector, back_sec);
                 Self::create_side_surfaces_top_seg(self, side, &v1, &v2, type_index, &mut sides, b_sky, tex_man);
             }
         }
@@ -319,7 +319,7 @@ impl LevelMesh {
             self.vertices.push(verts[3]);
 
             let plane = Self::to_plane(&verts[0], &verts[1], &verts[2]);
-            self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false});
+            self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: false });
         }
     }
 
@@ -351,7 +351,7 @@ impl LevelMesh {
         let type_ = SurfaceType::STMiddleWall;
         let control_sector = -1;
 
-        self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false });
+        self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: false });
 
     }
     fn create_side_surfaces_top_seg(&mut self, side: &Side, v1: &Vector2<f32>, v2: &Vector2<f32>, type_index: i32, sides: &mut SidesS, b_sky: bool, tex_man: &TextureManager) {
@@ -381,7 +381,7 @@ impl LevelMesh {
             let type_ = SurfaceType::STUpperWall;
             let control_sector = -1;
 
-            self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky })
+            self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: b_sky });
         }
 
         sides.v1_top = sides.back.unwrap().v1_top_back;
@@ -414,7 +414,7 @@ impl LevelMesh {
             let type_ = SurfaceType::STLowerWall;
             let control_sector = -1;
 
-            self.surfaces.push(Surface { type_, type_index, vert_count, start_vert_index, plane, control_sector, b_sky: false })
+            self.surfaces.push(Surface { type_, _type_index: type_index, vert_count, start_vert_index, _plane: plane, _control_sector: control_sector, _b_sky: false });
         }
 
         sides.v1_bottom = sides.back.unwrap().v1_bottom_back;
@@ -462,7 +462,7 @@ impl LevelMesh {
 
     
     //Functions for checking the surfaces/sector
-    fn is_top_side_sky(front_sector: &Sector, back_sector: &Sector, side: &Side) -> bool {
+    fn is_top_side_sky(front_sector: &Sector, back_sector: &Sector) -> bool {
         Self::is_sky_sector(front_sector) && Self::is_sky_sector(back_sector)
     }
     
@@ -483,7 +483,7 @@ impl LevelMesh {
         sector.get_texture(SectorE::Ceiling as usize) == temp_sky_num
     }
     
-    fn is_control_sector(sector: SectorIndex) -> bool {false}
+    fn is_control_sector(_sector: SectorIndex) -> bool {false}
 
     
     fn to_plane(p0: &Vector3<f32>, p1: &Vector3<f32>, p2: &Vector3<f32>) -> SectorPlane {
@@ -503,9 +503,9 @@ impl LevelMesh {
         Vector2::<f32>::new_params(v.x as f32, v.y as f32)
     }
     
-    fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {
-        Vector3::<f32>::new_params(v.x as f32, v.y as f32, v.z as f32)
-    }
+    // fn to_f32_vector3(v: &Vector3<f64>) -> Vector3<f32> {
+    //     Vector3::<f32>::new_params(v.x as f32, v.y as f32, v.z as f32)
+    // }
 
     //to check if the triangle is degenerate (zero cross product for two sides)
     fn is_degenerate(v0: &Vector3<f32>, v1: &Vector3<f32>, v2: &Vector3<f32>) -> bool {

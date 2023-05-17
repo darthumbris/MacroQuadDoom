@@ -1,7 +1,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::time::Instant;
 
-use crate::behavior::parse_level::WADLevelLinedef;
+use crate::parser::parse_level::WADLevelLinedef;
 use crate::game::{Game, GameType};
 use crate::parser::parse_level::WADLevel;
 use crate::vector::{Vector3, Vector2, Angle};
@@ -9,11 +10,11 @@ use crate::vector::{Vector3, Vector2, Angle};
 use super::level_actor::ClassActor;
 use super::level_mesh::LevelMesh;
 use super::{LevelLocals, ActionSpecials, SpecialMapThings, MapThingFlags};
-use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides};
-use super::level_lightmap::PalEntry;
+use super::level_elements::{Vertex, Sector, ExtSector, SectorFlags, SectorE, Line, SideDefIndex, LineFlags, Side, SectorIndex, Sides, SubSector, Node, ChildNode, Seg};
+use super::level_lightmap::{PalEntry, SurfaceType};
 use super::level_texture::{MissingTextureTracker, TextureID, TextureManager, MapSideDef, TextureType, TexManFlags, FakeColorMap};
 use super::LevelFlags;
-use crate::file_system::FileSystem;
+use crate::file_system::{FileSystem, make_id};
 
 pub struct MapLoader<'a, 'b> {
     pub level: &'a mut  LevelLocals,
@@ -55,58 +56,177 @@ impl MapLoader<'_, '_> {
         let mut missing_textures: MissingTextureTracker = MissingTextureTracker::new();
 
         if !map.is_text {
-            Self::load_vertexes(self, map);
+            self.load_vertexes(map);
             println!("going to load sectors");
-            Self::load_sectors(self, map, &mut missing_textures);
+            self.load_sectors(map, &mut missing_textures);
             println!("finished loading sectors");
             println!("going to load lines");
-            if !map.has_behavior {Self::load_linedefs(self, map)}
-            else {Self::load_linedefs2(self, map)}
+            if !map.has_behavior {self.load_linedefs(map)}
+            else {self.load_linedefs2(map)}
             println!("finished loading lines");
             println!("going to load sides");
-            Self::load_sidedefs(self, map, &mut missing_textures);
+            self.load_sidedefs(map, &mut missing_textures);
             println!("finished loading sides");
-            Self::finish_loading_linedefs(self);
+            self.finish_loading_linedefs();
             println!("finished doing finish_loading_linedefs");
             println!("going to load things");
-            if !map.has_behavior {Self::load_things(self, map, game)}
-            else {Self::load_things2(self, map, game)}
+            if !map.has_behavior {self.load_things(map, game)}
+            else {self.load_things2(map, game)}
             println!("finished loading things");
         }
         else {
             //TODO parse textmap
+            self.load_lightmap(map);
         }
-        Self::calc_indices(self);
+        self.calc_indices();
         println!("finished calculating indices");
+        //TODO PostProcessLevel();
         println!("going to loop the sidedefs");
-        Self::loop_side_defs(self, true);
+        self.loop_side_defs(true);
         println!("finished looping sidedefs");
 
-        /* TODO
-         * PostProcessLevel();
-         * LoopSidedefs();
-         * 
-         * loadsubsectors();
-         * loadnodes();
-         * loadsegs();
-         * 
-         * LoadBlockMap();
-         * LoadReject();
-         * 
-         * Spawn Functions
-         * 
-         * LoadLightMap();
-         */
+        //TODO SummarizeMissingTextures();
 
-         println!("map has {} vertexes", self.level.vertexes.len());
-         println!("map has {} sectors", self.level.sectors.len()); //TODO check why no sectors
-         println!("map has {} lines", self.level.lines.len());
-         println!("map has {} sides", self.level.sides.len()); //TODO check why no sides
-         println!("map has {} segs", self.level.segs.len());
-         println!("map has {} subsectors", self.level.subsectors.len());
-         println!("map has {} nodes", self.level.nodes.len());
+        let mut reloop = false;
 
+        if !self.force_node_build {
+
+            let id = make_id('X', 'x', 'X', 'x');
+            let mut idcheck = 0;
+            let mut idcheck2 = 0;
+            let mut idcheck3 = 0;
+            let mut idcheck4 = 0;
+            let mut idcheck5 = 0;
+            let mut idcheck6 = 0;
+
+            if map.znodes.len() != 0 {
+                idcheck = make_id('Z', 'N', 'O', 'D');
+                idcheck2 = make_id('X', 'N', 'O', 'D');
+            }
+            else if map.gl_znodes.len() != 0 {
+                idcheck = make_id('Z', 'G', 'L', 'N');
+                idcheck2 = make_id('Z', 'G', 'L', '2');
+                idcheck3 = make_id('Z', 'G', 'L', '3');
+                idcheck4 = make_id('X', 'G', 'L', 'N');
+                idcheck5 = make_id('X', 'G', 'L', '2');
+                idcheck6 = make_id('X', 'G', 'L', '3');
+            }
+            let mut nodes_loaded = false;
+
+            //another if check for the filereader
+            if id != 0 && (id == idcheck || id == idcheck2 || id == idcheck3 || id == idcheck4 || id == idcheck5 || id == idcheck6) {
+                nodes_loaded = self.load_extended_nodes();
+            }
+            else if !map.is_text {
+                if map.segs.len() != 0 || map.ssectors.len() != 0 || map.nodes.len() != 0 {
+                    //possible different types (v4nodes)
+                    nodes_loaded = self.load_subsectors(map) && self.load_nodes(map) && self.load_segs(map);
+                }
+            }
+            if !nodes_loaded {
+                if self.load_gl_nodes(map) {reloop = true}
+                else {self.force_node_build = true}
+            }
+        }
+        else {
+            //TODO
+            println!("else force_node_build is true, setting reloop to true");
+            reloop = true;
+        }
+
+        for i in 0..self.level.sides.len() {
+            self.level.sides[i].borrow_mut().side_num = i as i32;
+        }
+
+        let start_time = Instant::now();
+        let mut end_time = 0;
+        let build_gl_nodes: bool;
+
+        if self.force_node_build {
+            build_gl_nodes = true;
+
+            //TODO
+
+            end_time = start_time.elapsed().as_millis();
+            println!("if force_node_build is true, setting reloop to true");
+            reloop = true;
+        }
+        else {
+            build_gl_nodes = false;
+
+            //TODO
+        }
+
+        reloop |= self.check_nodes(map, build_gl_nodes, (end_time as u32) as i32);
+        //TODO level.headgamenode = something
+
+        //TODO loadBlockMap();
+        //TODO loadreject();
+        //TODO grouplines();
+        //TODO floodzones();
+        //TODO setrendersector();
+        //TODO fixMinisegReferences();
+        //TODO fixHoles();
+
+        self.calc_indices();
+
+        self.level.body_que_slot = 0;
+
+        //TODO loop through bodyque and set them to null (or something)
+
+        //TODO createSections();
+        //TODO SpawnSlopeMakers();
+        //TODO CopySlopes();
+        //TODO Spawn3DFloors();
+        //TODO SpawnThings();
+
+        if !self.force_node_build {
+            self.load_lightmap(map);
+        }
+
+        //TODO loop through players and reset health
+
+        if !map.has_behavior && !map.is_text {
+            //TODO TranslatePortalThings();
+        }
+
+        //TODO maybe delete oldvertextable?
+
+        //TODO SpawnSpecials();
+
+        //TODO loop through sectors to disable reflective planes on slopes
+        //TODO loop through nodes and set the node.len
+
+        //TODO InitRenderInfo();
+        //TODO level.clearDynamic3DFloorData();
+        //TODO CreateVBO();
+        //TODO screen.initLightMap();
+
+        //TODO loop through sectors and P_Recalculate3DFloors();
+        //TODO software_renderer.SetColorMap();
+
+        //TODO InitPortalGroups();
+        //TODO P_InitHealthGroups();
+
+
+        if reloop {
+            println!("reloop: looping sidedefs again");
+            self.loop_side_defs(false);
+        }
+
+        //TODO POInit();
+        //TODO if !level.is_reentering() {FinalizePortals();}
+
+        //TODO self.level.aabbtree = DoomLevelAABBTree();
         self.level.level_mesh = Rc::new(LevelMesh::new(&self.level, self.tex_manager));
+
+        println!("map has {} vertexes", self.level.vertexes.len());
+        println!("map has {} sectors", self.level.sectors.len());
+        println!("map has {} lines", self.level.lines.len());
+        println!("map has {} sides", self.level.sides.len());
+        println!("map has {} segs", self.level.segs.len());
+        println!("map has {} subsectors", self.level.subsectors.len());
+        println!("map has {} nodes", self.level.nodes.len());
     }
 
     fn load_vertexes(&mut self, map: &WADLevel) {
@@ -182,6 +302,226 @@ impl MapLoader<'_, '_> {
         }
     }
 
+    fn load_subsectors(&mut self, map: &WADLevel) -> bool {
+        println!("going to load subsectors");
+        let max_segs = map.segs.len();
+        let subsector_amount = map.ssectors.len();
+
+        if subsector_amount == 0 || max_segs == 0 {
+            println!("This map has an incomplete BSP tree.");
+            self.level.nodes.clear();
+            return false
+        }
+
+        self.level.subsectors.resize(subsector_amount, Rc::new(RefCell::new(SubSector::new())));
+        for i in 0..subsector_amount {
+            if map.ssectors[i].num_segs == 0 {
+                println!("Subsector {} is empty.", i);
+                self.level.subsectors.clear();
+                self.level.nodes.clear();
+                return false
+            }
+
+            let line_count = map.ssectors[i].num_segs;
+            let first_line = map.ssectors[i].start_seg;
+
+            if line_count as usize >= max_segs {
+                println!("Subsector {} contains invalid segs {}-{}.\nThe BSP Tree will be rebuilt.", i, first_line, first_line as usize + line_count as usize - 1);
+                self.level.subsectors.clear();
+                self.level.nodes.clear();
+                return false
+            }
+            else if first_line as usize + line_count as usize > max_segs {
+                println!("Subsector {} contains invalid segs {}-{}.\nThe BSP Tree will be rebuilt.", i, max_segs, first_line as usize + line_count as usize - 1);
+                self.level.subsectors.clear();
+                self.level.nodes.clear();
+                return false
+            }
+
+            let mut subsector = self.level.subsectors[i].borrow_mut();
+            subsector.line_count = line_count as u32;
+            subsector.first_line = first_line as i32;
+        }
+        true
+    }
+
+    fn load_nodes(&mut self, map: &WADLevel) -> bool {
+        println!("going to load nodes");
+        let node_amount = map.nodes.len();
+        let max_subsectors = map.ssectors.len();
+        
+        if (node_amount == 0 && max_subsectors != 1) || max_subsectors == 0 {
+            return false
+        }
+
+        self.level.nodes.resize(node_amount, Rc::new(RefCell::new(Node::new())));
+        let mut used = vec![0;node_amount];
+        let mut ret = true;
+
+        for i in 0..node_amount {
+            let mut node = self.level.nodes[i].borrow_mut();
+            let map_node = &map.nodes[i];
+
+            node.x = map_node.x_start as i32;
+            node.y = map_node.y_start as i32;
+            node.dx = map_node.dx as i32;
+            node.dy = map_node.dy as i32;
+
+            let mut children: [i32;2] = [map_node.right_child as i32, map_node.left_child as i32];
+            for j in 0..2 {
+                if children[j] & 0x8000 != 0 {
+                    children[j] &= !0x8000;
+                    if children[j] as usize > max_subsectors {
+                        println!("children: {:?}, mapchildren: {},{}", children, map_node.right_child, map_node.left_child);
+                        println!("BSP node {} references invalid subsector {}.\nThe BSP will be rebuilt.", i, children[j]);
+                        ret = false;
+                        break
+                    }
+                    node.children[j] = ChildNode::new(children[j], -1);
+                }
+                else if children[j] as usize >= node_amount {
+                    println!("BSP node {} references invalid node {:?}.\nThe BSP will be rebuilt.", i, node.children[j]);
+                        ret = false;
+                        break
+                }
+                else if used[children[j] as usize] != 0 {
+                    println!("BSP node {} references node {} which is already referenced by node {}.\nThe BSP will be rebuilt.", i, children[j], used[children[j] as usize] - 1);
+                        ret = false;
+                        break
+                }
+                else {
+                    node.children[j] = ChildNode::new(-1, children[j]);
+                    used[children[j] as usize] = j + 1;
+                }
+                for k in 0..4 { node.bbox[j][k] = map_node.get_bbox(j, k) as f32}
+            }
+            if ret == false {break}
+        }
+        if ret == false { self.level.nodes.clear() }
+        ret
+    }
+
+    fn load_segs(&mut self, map: &WADLevel) -> bool {
+        println!("going to load segs");
+        let mut ret = true;
+        let seg_amount = map.segs.len();
+        let vertex_amount = map.vertexes.len();
+        let mut vert_changed = vec![0 as u8; vertex_amount];
+        let mut seg_angle: u32;
+
+        let mut v_num1: u32;
+        let mut v_num2: u32;
+
+        if seg_amount == 0 {
+            println!("This map has no segs!");
+            self.level.subsectors.clear();
+            self.level.nodes.clear();
+            return false
+        }
+
+        self.level.segs.resize(seg_amount, Rc::new(RefCell::new(Seg::new())));
+
+        // for i in 0..self.level.subsectors.len() {
+        //     self.level.subsectors[i].borrow_mut().first_line = 
+        // }
+
+        for i in 0..self.level.lines.len() {
+            vert_changed[self.level.lines[i].borrow_mut().v1.vertex_num as usize] = 1;
+            vert_changed[self.level.lines[i].borrow_mut().v2.vertex_num as usize] = 1;
+        }
+
+        for i in 0..seg_amount {
+            let mut seg = self.level.segs[i].borrow_mut();
+            let map_seg = &map.segs[i];
+            let side: i32;
+            let linedef: i32;
+            let mut ldef;
+
+            v_num1 = map_seg.start as u32;
+            v_num2 = map_seg.end as u32;
+
+            if v_num1 as usize >= vertex_amount || v_num2 as usize  >= vertex_amount {
+                println!("Seg {} references a nonexistant vertex {} (max {}).", i, v_num1.max(v_num2), vertex_amount);
+                ret = false;
+                break;
+            }
+
+            seg.v1 = v_num1 as i32;
+            seg.v2 = v_num2 as i32;
+
+            seg_angle = map_seg.angle as u32;
+
+            let dif = self.level.vertexes[v_num2 as usize].borrow_mut().f_pos().subtract_result(&self.level.vertexes[v_num1 as usize].borrow_mut().f_pos());
+            let ptp_angle: Angle<f64> = dif.angle();
+            let seg_angle_b: Angle<f64> = Angle::<f64>::from_bam_u(seg_angle << 16);
+            let delta_angle: Angle<f64> = Angle::<f64>::abs_angle(&ptp_angle, &seg_angle_b);
+
+            if delta_angle >= Angle::<f64>::from_degrees(1.) {
+                let distance: f64 = dif.length();
+                let delta: Vector2<f64> = seg_angle_b.to_vector(distance);
+                let mut v2 = self.level.vertexes[seg.v2 as usize].borrow_mut();
+                let mut v1 = self.level.vertexes[seg.v1 as usize].borrow_mut();
+                if v_num2 > v_num1 && vert_changed[v_num2 as usize] == 0 {
+                    v2.set_from_vector(&v1.f_pos().add_result(&delta));
+                    vert_changed[v_num2 as usize] = 1;
+                }
+                else if vert_changed[v_num1 as usize] == 0 {
+                    v1.set_from_vector(&v2.f_pos().subtract_result(&delta));
+                    vert_changed[v_num1 as usize] = 1;
+                }
+            }
+            linedef = map_seg.linedef as i32;
+            if linedef as usize >= self.level.lines.len() {
+                println!("Seg {} references a nonexistant linedef {} (max {}).", i, linedef, self.level.lines.len());
+                ret = false;
+                break;
+            }
+            seg.linedef = linedef;
+
+            side = map_seg.direction as i32;
+            if side != 0 && side != 1 {
+                println!("The sidedef in seg {} is {} (must be 0 or 1).", i, side);
+                ret = false;
+                break;
+            }
+            ldef = self.level.lines[linedef as usize].borrow_mut();
+            if ldef.sidedef[side as usize] as usize >= self.level.sides.len() {
+                println!("The linedef for seg {} references a nonexistant sidedef {} (max {}).", i, ldef.sidedef[side as usize], self.level.sides.len());
+                ret = false;
+                break;
+            }
+            seg.sidedef = ldef.sidedef[side as usize];
+            let line_side = self.level.sides[ldef.sidedef[side as usize] as usize].borrow_mut();
+            let other_line_side = ldef.sidedef[(side^1) as usize];
+            seg.front_sector = line_side.sector;
+            if ldef.flags & LineFlags::TwoSided.bits() != 0 && other_line_side != -1 {
+                seg.back_sector = other_line_side;
+            }
+            else {
+                seg.back_sector = -1;
+                ldef.flags &= !LineFlags::TwoSided.bits();
+            }
+        }
+        if !ret {
+            self.level.segs.clear();
+            self.level.subsectors.clear();
+            self.level.nodes.clear();
+        }
+        ret
+    }
+
+    pub fn load_gl_nodes(&mut self, _map: &WADLevel) -> bool {
+        //TODO
+        println!("loading gl_nodes");
+        true
+    }
+
+    pub fn load_extended_nodes(&mut self) -> bool {
+        //TODO
+        println!("loading extended nodes");
+        true
+    }
+
 
     fn load_linedefs(&mut self, map: &mut WADLevel) {
 
@@ -234,7 +574,8 @@ impl MapLoader<'_, '_> {
             if line.special != 190 /*Static_INIT ? */ && line.args[1] != 254 /*InitEdLine */ && line.args[1] != 253 /*InitEdSector */{
                 let temp = linedef.clone();
                 self.level.tag_manager.add_line_id(i, temp.doom.unwrap().tag);
-                println!("add line id");
+                // println!("add line id");
+                //TODO
             }
             if line.special == 190 /*Static_INIT ? */ && line.args[1] == 254 /*InitEdLine */ {
                 println!("process eternity doom linedef");
@@ -278,7 +619,7 @@ impl MapLoader<'_, '_> {
     }
 
     //This is for hexen map formats
-    fn load_linedefs2(&mut self, map: &WADLevel) {
+    fn load_linedefs2(&mut self, _map: &WADLevel) {
     
         //TODO make this
     }
@@ -289,7 +630,7 @@ impl MapLoader<'_, '_> {
             let mut index = 0;
             match sideinit {
                 SideInit::A(t) => {index = t.map as usize}
-                SideInit::B(t) => {}
+                SideInit::B(_) => {}
             }
             let map_sidedef = &map.sidedefs[index];
             let mut side = self.level.sides[i].borrow_mut();
@@ -352,7 +693,7 @@ impl MapLoader<'_, '_> {
         for i in 0..side_amount {
             // println!("i: {}", i);
             if matches!(self.side_temp[i], SideInit::B(_)) {
-                let line = self.level.lines[self.level.sides[i].borrow().linedef as usize].borrow();
+                let line = self.level.lines[self.level.sides[i].borrow_mut().linedef as usize].borrow_mut();
                 let line_side = line.sidedef[0] != i as i32;
                 let vert = if line_side {line.v2.vertex_num} else {line.v1.vertex_num};
 
@@ -368,8 +709,8 @@ impl MapLoader<'_, '_> {
         }
         for i in 0..side_amount {
             // println!("2i: {}", i);
-            let mut right: u32 = u32::max_value();
-            let line = self.level.lines[self.level.sides[i].borrow().linedef as usize].borrow();
+            let mut right: u32;
+            let line = self.level.lines[self.level.sides[i].borrow_mut().linedef as usize].borrow_mut();
 
             if line.front_sector == line.back_sector {
                 if matches!(self.side_temp[i], SideInit::B(_)) {
@@ -379,7 +720,7 @@ impl MapLoader<'_, '_> {
                             if first_loop {println!("line {}'s right edge is unconnected", self.line_map[line.line_num as usize])}
                             continue;
                         }
-                        let right_side = self.level.sides[right_side_index as usize].borrow();
+                        let right_side = self.level.sides[right_side_index as usize].borrow_mut();
                         right = right_side.side_num as u32;
                 }
                 else {panic!("error should be SideInitB")}
@@ -402,8 +743,8 @@ impl MapLoader<'_, '_> {
                         let mut best_right = right;
                         let mut best_angle = Angle::<f64>::from_degrees(360.);
 
-                        let left_l_index = self.level.sides[i].borrow().linedef;
-                        let left_line = self.level.lines[left_l_index as usize].borrow();
+                        let left_l_index = self.level.sides[i].borrow_mut().linedef;
+                        let left_line = self.level.lines[left_l_index as usize].borrow_mut();
                         let mut right_line;
                         let mut angle_1: Angle<f64> = left_line.delta().angle();
                         let mut angle_2: Angle<f64>;
@@ -412,10 +753,10 @@ impl MapLoader<'_, '_> {
                         if side_temp_i.lineside == 0 { angle_1.add(&Angle::<f64>::from_degrees(180.))}
                         while right != 0xffffffff {
                             side_temp_right = self.side_temp[right as usize].get_b().unwrap();
-                            let side = self.level.sides[right as usize].borrow();
+                            let side = self.level.sides[right as usize].borrow_mut();
                             if side.left_side == 0xffffffff /*No_Side*/ {
                                 let right_l_index = side.linedef;
-                                right_line = self.level.lines[right_l_index as usize].borrow();
+                                right_line = self.level.lines[right_l_index as usize].borrow_mut();
                                 if right_line.front_sector != right_line.back_sector {
                                     angle_2 = right_line.delta().angle();
                                     if side_temp_right.lineside != 0 {
@@ -446,8 +787,8 @@ impl MapLoader<'_, '_> {
     
     fn finish_loading_linedefs(&mut self) {
         for i in 0..self.level.lines.len() {
-            let mut index = self.level.lines[i].borrow().sidedef[0] as usize;
-            if self.level.lines[i].borrow().sidedef[0] == -1 {index = 0} //TODO check this
+            let mut index = self.level.lines[i].borrow_mut().sidedef[0] as usize;
+            if self.level.lines[i].borrow_mut().sidedef[0] == -1 {index = 0} //TODO check this
             // println!("trying to acces: {} and len is: {}", index, self.side_temp.len());
             // println!("sidedef[0]: {}, i: {}", self.level.lines[i].borrow().sidedef[0], i);
             match self.side_temp[index] {
@@ -463,11 +804,11 @@ impl MapLoader<'_, '_> {
         let mut additive = false;
 
         if line.sidedef[0] != -1 {
-            let side = self.level.sides[line.sidedef[0] as usize].borrow();
+            let side = self.level.sides[line.sidedef[0] as usize].borrow_mut();
             line.front_sector = side.sector;
         } else {line.front_sector = -1}
         if line.sidedef[1] != -1 {
-            let side = self.level.sides[line.sidedef[1] as usize].borrow();
+            let side = self.level.sides[line.sidedef[1] as usize].borrow_mut();
             line.back_sector = side.sector;
         } else {line.back_sector = -1}
         
@@ -555,7 +896,7 @@ impl MapLoader<'_, '_> {
 
             
             //TODO is in an ifnded NO_EDATA
-            if mapthing.info.is_some() && mapthing.info.as_deref().unwrap().special == SpecialMapThings::SMT_EDThing.into() {
+            if mapthing.info.is_some() && mapthing.info.as_deref().unwrap().special == SpecialMapThings::EDThing.into() {
                 Self::process_eternity_map_thing(self);
             }
             else {
@@ -613,7 +954,7 @@ impl MapLoader<'_, '_> {
     }
     
     //This is for hexen map formats
-    fn load_things2(&mut self, map: &WADLevel, game: &Game) {
+    fn load_things2(&mut self, _map: &WADLevel, _game: &Game) {
         //TODO
     }
 
@@ -674,11 +1015,11 @@ impl MapLoader<'_, '_> {
         self.side_count = 0;
     }
 
-    fn process_eternity_doom_linedef(&self, line: &Line, maplinedef: &WADLevelLinedef) {
+    fn process_eternity_doom_linedef(&self, _line: &Line, maplinedef: &WADLevelLinedef) {
         //TODO
         Self::init_eternity_doom(self);
 
-        let record_num = maplinedef.doom.as_ref().unwrap().tag;
+        let _record_num = maplinedef.doom.as_ref().unwrap().tag;
 
     }
 
@@ -731,7 +1072,7 @@ impl MapLoader<'_, '_> {
                 //error for all things that use this side
                 for i in 0..self.level.lines.len() {
                     for j in 0..2 {
-                        if self.level.lines[i].borrow().sidedef[j] == side.udmf_index { //TODO not completly sure about the udfm_index
+                        if self.level.lines[i].borrow_mut().sidedef[j] == side.udmf_index { //TODO not completly sure about the udfm_index
                             println!("unkown {:?} texture {:?} on {} side of linedef {}", position_names[pos], name, side_names[j], i);
                         }
                     }
@@ -752,7 +1093,7 @@ impl MapLoader<'_, '_> {
 
             if !name.starts_with("#") {
                 *color = u32::from_str_radix(&name.to_string(), 16).unwrap();
-                texture = TextureID::new();
+                // texture = TextureID::new(); //TODO seems unnecesary?
                 // *valid_color = *stop == 0 && 
                 //TODO weird stuff here?
                 return
@@ -795,7 +1136,7 @@ impl MapLoader<'_, '_> {
                         factor = 0;
                     }
                     *color = u32::from_le_bytes([factor as u8, red as u8, green as u8, blue as u8]);
-                    texture = TextureID::new();
+                    // texture = TextureID::new(); //TODO seems unnecesary?
                     *valid_color = true;
                     return
                 }
@@ -889,7 +1230,7 @@ impl MapLoader<'_, '_> {
                     }                 
                 }
             }
-            SideInit::B(t) => {}
+            SideInit::B(_) => {}
         }
     }
 
@@ -906,6 +1247,20 @@ impl MapLoader<'_, '_> {
             }
         }
         0
+    }
+
+    fn load_lightmap(&mut self, _map: &WADLevel) {
+        //TODO
+        let surfacetype = SurfaceType::STNull;
+
+        if surfacetype == SurfaceType::STNull {
+            println!("ok");
+        }
+    }
+
+    fn check_nodes(&self, _map: &WADLevel, _rebuilt: bool, _build_time: i32) -> bool {
+        //TODO
+        false
     }
 }
 
@@ -942,7 +1297,7 @@ impl SideInit {
 
     pub fn get_a(&self) -> Option<SideInitA> {
         match self {
-            SideInit::A(mut t) => {return Some(t.clone())}
+            SideInit::A(t) => {return Some(t.clone())}
             SideInit::B(_) => {return None}
         }
     }
@@ -987,104 +1342,36 @@ pub struct SideInitB {
 
 #[derive(Default)]
 pub struct MapThing {
-    thing_id: i32,
+    _thing_id: i32,
     pos: Vector3<f64>,
     angle: i16,
     skill_filter: u16,
     class_filter: u16,
     ed_num: i16,
     flags: u32,
-    special: i32,
-    args: [i32;5],
+    _special: i32,
+    _args: [i32;5],
     conversation: i32,
     gravity: f64,
     alpha: f64,
-    fill_color: u32,
-    scale: Vector2<f32>,
+    _fill_color: u32,
+    _scale: Vector2<f32>,
     health: f64,
-    score: i32,
-    pitch: i16,
-    roll: i16,
+    _score: i32,
+    _pitch: i16,
+    _roll: i16,
     render_style: u32,
     float_bob_phase: i32,
-    friendly_see_blocks: i32,
-    arg_0_str: String,
+    _friendly_see_blocks: i32,
+    _arg_0_str: String,
     pub info: Option<Rc<DoomEternityEntry>>
 }
 
 #[derive(Default)]
 pub struct DoomEternityEntry {
-    type_: Rc<ClassActor>,
+    _type_: Rc<ClassActor>,
     special: i16,
-    args_defined: i8,
-    no_skill_flags: bool,
-    args: [i32;5]
+    _args_defined: i8,
+    _no_skill_flags: bool,
+    _args: [i32;5]
 }
-
-/*
-TODO
-*   MapLoader::LoadLevel() {
-*      LoadBehavior();
-*      T_LoadScripts();
-*      Level->Behaviors.LoadDefaultModules();
-*      LoadMapinfoACSLump();
-*      LoadStrifeConversations();
-* 
-*      if (!textmap) {
-*          LoadVertexes(); DONE
-*          LoadLineDefs(); DONE
-*          LoadSideDefs2(); DONE
-*          FinishLoadingLineDefs(); DONE
-*          LoadThings();
-*      }
-*      else {
-*          ParseTextMap();
-*      }
-* 
-*      CalcIndices();
-*      PostProcessLevel();
-* 
-*      LoopSidedefs();
-* 
-*      if (something)  {
-*           LoadExtendedNodes();
-            if !textmap {
-                loadsubsectors();
-                loadnodes();
-                loadsegs();
-            }
-*           if (!NodesLoaded) {
-*                LoadGLNodes();
-*           }
-*      }
-* 
-* 
-*      LoadBlockMap();
-*      LoadReject();
-*      GroupLines();
-*      FloodZones();
-*      SetRenderSector();
-*      FixMiniSegReferences();
-*      FixHoles();
-*      CalcIndices();
-* 
-*      CreateSections();
-* 
-*      SpawnSlopeMakers();
-* 
-*      Spawn3DFloors();
-* 
-*      SpawnThings();
-* 
-*      if (someasd) {
-*           LoadLightMap();
-*      }
-* 
-*      SpawnSpecials();
-*      
-*      otherstuff
-*      
-*      Level->levelMesh = new DoomLevelMesh(*Level);
-* }
-* 
-*/
