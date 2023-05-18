@@ -68,7 +68,7 @@ impl BlockMap {
 
                 offset = block_offset;
 
-                if offset < 0 || offset >= count {
+                if offset < i32::max_value() as usize || offset >= count {
                     println!("Verifying blockmap: list offset overflow");
                     return false
                 }
